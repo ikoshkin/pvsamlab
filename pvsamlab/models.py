@@ -1,100 +1,110 @@
 import PySAM.Pvsamv1 as pv
-from dataclasses import dataclass, field, asdict
-from typing import Tuple
 
-@dataclass
 class SolarResource:
-    albedo: Tuple[float, ...] = field(default_factory=lambda: (0.2,) * 12)
-    albedo_spatial: Tuple[Tuple[float, ...], ...] = field(default_factory=lambda: ((0.2,) * 10,) * 12)
-    irrad_mode: float = 0.0
-    sky_model: float = 2.0
-    use_spatial_albedos: float = 0.0
-    use_wf_albedo: float = 1.0
+    def __init__(self, albedo=0.2, irrad_mode=1, sky_model=2):
+        self.albedo = albedo
+        self.irrad_mode = irrad_mode
+        self.sky_model = sky_model
 
-@dataclass
 class SystemDesign:
-    system_capacity: float = 100000.0  # kW
-    inverter_count: int = 30
-    subarray1_azimuth: float = 180.0
-    subarray1_tilt: float = 20.0
-    subarray1_nstrings: int = 15000
-    subarray1_modules_per_string: int = 20
-    subarray1_track_mode: int = 0  # 0 = Fixed, 1 = 1-Axis, 2 = 2-Axis
-    subarray1_backtrack: bool = False
-    subarray1_gcr: float = 0.3
+    def __init__(self, system_capacity=None, inverter_count=None, subarray1_gcr=None):
+        self.system_capacity = system_capacity
+        self.inverter_count = inverter_count
+        self.subarray1_gcr = subarray1_gcr
 
-@dataclass
 class Losses:
-    acwiring_loss: float = 1.0
-    subarray1_dcwiring_loss: float = 2.0
-    subarray1_soiling: Tuple[float, ...] = field(default_factory=lambda: (5.0,) * 12)
-    transformer_load_loss: float = 0.0
+    def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=5.0):
+        self.acwiring_loss = acwiring_loss
+        self.subarray1_dcwiring_loss = subarray1_dcwiring_loss
+        self.subarray1_soiling = subarray1_soiling
 
-@dataclass
 class Module:
-    model_type: int = 2  # 6-parameter module model
-    v_oc: float = 64.4
-    i_sc: float = 6.05
-    v_mp: float = 54.7
-    i_mp: float = 5.67
-    area: float = 1.631
-    n_series: int = 96
-    t_noct: float = 46.0
-    standoff: float = 6.0
-    mounting: int = 0  # 0 = Open rack, 1 = Roof mount
-    is_bifacial: bool = False
-    bifacial_transmission_factor: float = 0.013
-    bifaciality: float = 0.7
+    def __init__(self, v_oc=64.4, i_sc=6.05, v_mp=54.7, i_mp=5.67, area=1.631):
+        self.v_oc = v_oc
+        self.i_sc = i_sc
+        self.v_mp = v_mp
+        self.i_mp = i_mp
+        self.area = area
 
-@dataclass
 class Inverter:
-    model_type: int = 1  # Datasheet model
-    paco: float = 4000.0  # Max AC power (W)
-    efficiency: float = 96.0
-    pnt: float = 1.0  # Night-time power loss (W)
-    pso: float = 0.0  # Standby power loss (W)
-    vdcmax: float = 600.0  # Max DC voltage (V)
-    vdco: float = 310.0  # DC operating voltage (V)
+    def __init__(self, paco=4000.0, efficiency=96.0):
+        self.paco = paco
+        self.efficiency = efficiency
 
-@dataclass
 class PVSystem:
-    solar_resource: SolarResource = field(default_factory=SolarResource)
-    system_design: SystemDesign = field(default_factory=SystemDesign)
-    losses: Losses = field(default_factory=Losses)
-    module: Module = field(default_factory=Module)
-    inverter: Inverter = field(default_factory=Inverter)
+    def __init__(self, mwac=None, dcac_ratio=None, module_model="Default Module", gcr=None, inverter_efficiency=97.5,
+                 solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
+        """Initialize with user-friendly inputs and compute necessary values."""
+        self.mwac = mwac
+        self.dcac_ratio = dcac_ratio
+        self.module_model = module_model
+        self.gcr = gcr
+        self.inverter_efficiency = inverter_efficiency
 
-    model: pv.Pvsamv1 = field(init=False)
-    outputs: dict = field(init=False)
+        self.solar_resource = solar_resource if solar_resource else SolarResource()
+        self.system_design = system_design if system_design else SystemDesign()
+        self.losses = losses if losses else Losses()
+        self.module = module if module else Module()
+        self.inverter = inverter if inverter else Inverter()
 
-    def __post_init__(self):
-        """Initializes and runs the PySAM model."""
-        self.model = pv.default("FlatPlatePVNone")
+        self.compute_pysam_inputs()
         self.assign_inputs()
         self.run_simulation()
 
+    def compute_pysam_inputs(self):
+        """Bridges user inputs to PySAM-compatible values, handling defaults dynamically."""
+        DEFAULT_MWAC = 100
+        DEFAULT_DCAC_RATIO = 1.35
+        DEFAULT_GCR = 0.3
+
+        self.mwac = self.mwac if self.mwac is not None else DEFAULT_MWAC
+        self.dcac_ratio = self.dcac_ratio if self.dcac_ratio is not None else DEFAULT_DCAC_RATIO
+        self.gcr = self.gcr if self.gcr is not None else DEFAULT_GCR
+
+        self.system_capacity = self.mwac * 1000 * self.dcac_ratio
+        
+        module_power_watts = 400
+        total_modules = self.system_capacity * 1000 / module_power_watts
+        modules_per_string = 20
+        n_strings = total_modules // modules_per_string
+
+        self.pysam_inputs = {
+            "system_capacity": self.system_capacity,
+            "subarray1_nstrings": n_strings,
+            "subarray1_modules_per_string": modules_per_string,
+            "subarray1_gcr": self.gcr,
+            "inverter_count": round(self.mwac * 1000 / (self.dcac_ratio * 4000)),
+            "inv_ds_eff": self.inverter_efficiency
+        }
+
     def assign_inputs(self):
-        """Assigns input values to PySAM groups using dataclass dictionaries."""
-        self.model.SolarResource.assign(asdict(self.solar_resource))
-        self.model.SystemDesign.assign(asdict(self.system_design))
-        self.model.Losses.assign(asdict(self.losses))
-        self.model.Module.assign(asdict(self.module))
-        self.model.Inverter.assign(asdict(self.inverter))
+        """Assigns computed values to PySAM."""
+        self.model = pv.default("FlatPlatePVNone")
+        self.model.SystemDesign.assign(self.pysam_inputs)
 
     def run_simulation(self):
-        """Executes the PySAM simulation and retrieves outputs."""
+        """Runs PySAM with assigned inputs and processes outputs."""
         self.model.execute()
-        self.outputs = self.model.Outputs.export()
-    
-    def update_parameter(self, group: str, param: str, value):
-        """Dynamically updates a parameter and reassigns to PySAM."""
-        if hasattr(self, group):
-            obj = getattr(self, group)
-            if hasattr(obj, param):
-                setattr(obj, param, value)
-                self.assign_inputs()
-                self.run_simulation()
-            else:
-                raise ValueError(f"Parameter '{param}' not found in '{group}'")
+        self.process_outputs()
+
+    def process_outputs(self):
+        """Transforms PySAM outputs into user-friendly results."""
+        self.outputs = {
+            "max_dc_voltage": self.model.Outputs.dc_voltage_max,
+            "mwh_per_year": self.model.Outputs.annual_energy / 1000,
+            "energy_losses_summary": {
+                "inverter_efficiency_loss": self.model.Outputs.annual_ac_inv_eff_loss_percent,
+                "soiling_loss": self.model.Outputs.annual_dc_soiling_loss_percent
+            },
+            "hourly_energy_data": self.model.Outputs.ac_gross
+        }
+
+    def update_parameter(self, param: str, value):
+        """Allows users to update key high-level parameters and re-run the simulation."""
+        if hasattr(self, param):
+            setattr(self, param, value)
+            self.compute_pysam_inputs()
+            self.assign_inputs()
+            self.run_simulation()
         else:
-            raise ValueError(f"Group '{group}' not found in PVSystem")
+            raise ValueError(f"Parameter '{param}' not found in PVSystem")
