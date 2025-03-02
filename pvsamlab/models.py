@@ -1,5 +1,24 @@
 import PySAM.Pvsamv1 as pv
 
+class Location:
+    def __init__(self, lat=None, lon=None, elev=None, tz=None):
+        """
+        Represents the location of the PV system.
+        
+        Args:
+            lat (float, optional): Latitude in decimal degrees.
+            lon (float, optional): Longitude in decimal degrees.
+            elev (float, optional): Elevation above sea level (meters).
+            tz (float, optional): Time zone offset from UTC (hours).
+        """
+        self.lat = lat if lat is not None else 0.0
+        self.lon = lon if lon is not None else 0.0
+        self.elev = elev if elev is not None else 0.0
+        self.tz = tz if tz is not None else 0
+
+    def __repr__(self):
+        return f"Location(lat={self.lat}, lon={self.lon}, elev={self.elev}, tz={self.tz})"
+
 class SolarResource:
     def __init__(self, albedo=0.2, irrad_mode=1, sky_model=2):
         self.albedo = albedo
@@ -32,15 +51,21 @@ class Inverter:
         self.efficiency = efficiency
 
 class PVSystem:
-    def __init__(self, mwac=None, dcac_ratio=None, module_model="Default Module", gcr=None, inverter_efficiency=97.5,
-                 solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
+    def __init__(self, lat=None, lon=None, elev=None, tz=None, mwac=None, dcac_ratio=None, module_model="Default Module", 
+                 gcr=None, inverter_efficiency=97.5, solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
         """Initialize with user-friendly inputs and compute necessary values."""
+        
+        # Automatically create a Location instance if lat/lon are provided
+        self.location = Location(lat, lon, elev, tz)
+
+        # Store user inputs
         self.mwac = mwac
         self.dcac_ratio = dcac_ratio
         self.module_model = module_model
         self.gcr = gcr
         self.inverter_efficiency = inverter_efficiency
 
+        # Store optional detailed inputs
         self.solar_resource = solar_resource if solar_resource else SolarResource()
         self.system_design = system_design if system_design else SystemDesign()
         self.losses = losses if losses else Losses()
