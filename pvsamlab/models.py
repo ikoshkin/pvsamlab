@@ -85,3 +85,16 @@ class PVSystem:
         """Executes the PySAM simulation and retrieves outputs."""
         self.model.execute()
         self.outputs = self.model.Outputs.export()
+    
+    def update_parameter(self, group: str, param: str, value):
+        """Dynamically updates a parameter and reassigns to PySAM."""
+        if hasattr(self, group):
+            obj = getattr(self, group)
+            if hasattr(obj, param):
+                setattr(obj, param, value)
+                self.assign_inputs()
+                self.run_simulation()
+            else:
+                raise ValueError(f"Parameter '{param}' not found in '{group}'")
+        else:
+            raise ValueError(f"Group '{group}' not found in PVSystem")
