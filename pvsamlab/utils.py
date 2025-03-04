@@ -1,5 +1,6 @@
 import os
 import logging
+import pvlib
 import PySAM.WeatherFile as wf
 
 # Configure logging
@@ -32,7 +33,7 @@ def fetch_weather_file(lat, lon, dataset_type="TMY", api_key="your_nsrdb_api_key
     Returns:
         str: Path to the downloaded or existing weather file.
     """
-    weather_folder = "weather_files"
+    weather_folder = "data/weather_files"
     os.makedirs(weather_folder, exist_ok=True)
 
     file_name = f"weather_{lat}_{lon}_{dataset_type}.csv"
@@ -67,3 +68,41 @@ def calculate_capacity_factor(mwh_per_year, system_capacity_kw):
     """Calculates capacity factor as a percentage."""
     hours_per_year = 8760
     return (mwh_per_year / (system_capacity_kw * hours_per_year)) * 100
+
+def parse_pan_file(pan_file):
+    """
+    Parses a .PAN file using pvlib and extracts relevant module parameters.
+
+    Args:
+        pan_file (str): Path to the .PAN file.
+
+    Returns:
+        dict: Extracted module parameters.
+    """
+    if not os.path.exists(pan_file):
+        log_error(f"❌ PAN file not found: {pan_file}")
+        return {}
+
+    try:
+        pan_data = pvlib.pvsystem.read_pan(pan_file)
+
+        extracted_params = {
+            "v_oc": pan_data["Voc_ref"],
+            "i_sc": pan_data["Isc_ref"],
+            "v_mp": pan_data["Vmp_ref"],
+            "i_mp": pan_data["Imp_ref"],
+            "area": pan_data.get("Area", 1.6),
+            "n_series": pan_data["Cells_in_Series"],
+            "t_noct": pan_data.get("T_NOCT", 45),
+            "standoff": pan_data.get("Standoff", 6),
+            "mounting": pan_data.get("Mounting", 1),
+            "is_bifacial": int(pan_data.get("Bifacial", 0)),
+            "bifacial_transmission_factor": pan_data.get("Bifacial_Trans_Factor", 0.95),
+            "bifaciality": pan_data.get("Bifaciality", 0.7)
+        }
+
+        log_info(f"✅ Successfully parsed PAN file: {pan_file}")
+        return extracted_params
+    except Exception as e:
+        log_error(f"⚠️ Error parsing PAN file: {e}")
+        return {}
