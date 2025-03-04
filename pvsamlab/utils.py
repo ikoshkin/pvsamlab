@@ -1,5 +1,6 @@
 import os
 import logging
+import pandas as pd
 import pvlib
 import PySAM.WeatherFile as wf
 
@@ -105,4 +106,35 @@ def parse_pan_file(pan_file):
         return extracted_params
     except Exception as e:
         log_error(f"⚠️ Error parsing PAN file: {e}")
+        return {}
+
+def parse_ond_file(ond_file):
+    """
+    Parses an .OND file and extracts relevant inverter parameters.
+
+    Args:
+        ond_file (str): Path to the .OND file.
+
+    Returns:
+        dict: Extracted inverter parameters.
+    """
+    if not os.path.exists(ond_file):
+        log_error(f"❌ OND file not found: {ond_file}")
+        return {}
+
+    try:
+        # Read OND file (assuming it’s structured as CSV or similar)
+        ond_data = pd.read_csv(ond_file, delimiter=";")
+
+        extracted_params = {
+            "inv_ds_paco": ond_data["Max_AC_Power(W)"].values[0],
+            "inv_ds_eff": ond_data["Efficiency(%)"].values[0],
+            "mppt_low_inverter": ond_data["MPPT_Low(V)"].values[0],
+            "mppt_hi_inverter": ond_data["MPPT_High(V)"].values[0]
+        }
+
+        log_info(f"✅ Successfully parsed OND file: {ond_file}")
+        return extracted_params
+    except Exception as e:
+        log_error(f"⚠️ Error parsing OND file: {e}")
         return {}
