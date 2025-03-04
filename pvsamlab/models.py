@@ -6,16 +6,16 @@ from pvsamlab.utils import log_info, log_error, fetch_weather_file, mw_to_kw, w_
 
 # Define default file paths
 PAN_FILE_DIR = os.path.join(os.path.dirname(__file__), "data/modules")
-DEFAULT_PAN_FILE = os.path.join(PAN_FILE_DIR, "default_module.pan")
+DEFAULT_PAN_FILE = os.path.join(PAN_FILE_DIR, "JAM66D45-640LB(3.2+2.0mm).PAN")
 
 OND_FILE_DIR = os.path.join(os.path.dirname(__file__), "data/inverters")
-DEFAULT_OND_FILE = os.path.join(OND_FILE_DIR, "default_inverter.ond")
+DEFAULT_OND_FILE = os.path.join(OND_FILE_DIR, "Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND")
 
 class Location:
     def __init__(self, lat=None, lon=None, elev=None, tz=None):
         self.lat = lat if lat is not None else 0.0
         self.lon = lon if lon is not None else 0.0
-        self.eleadd v = elev if elev is not None else 0.0
+        self.elev = elev if elev is not None else 0.0
         self.tz = tz if tz is not None else 0
 
 class SolarResource:
