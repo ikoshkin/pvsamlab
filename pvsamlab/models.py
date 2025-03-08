@@ -35,41 +35,53 @@ class SolarResource:
 
 class Module:
     def __init__(self, pan_file=None):
-        """
-        Represents a photovoltaic module using the 6-parameter user-defined model.
-
-        Args:
-            pan_file (str, optional): Path to a .PAN file to extract module parameters.
-                                      Defaults to the default module file.
-        """
         self.module_model = 2
         pan_file = pan_file or DEFAULT_PAN_FILE
         self.params = parse_pan_file(pan_file)
 
-    def __repr__(self):
-        return f"Module({self.params})"
-
 class Inverter:
     def __init__(self, ond_file=None):
-        """
-        Represents an inverter using the datasheet model.
-
-        Args:
-            ond_file (str, optional): Path to an .OND file to extract inverter parameters.
-                                      Defaults to the default inverter file.
-        """
-        self.inverter_model = 1  # Always use datasheet-based model
+        self.inverter_model = 1
         ond_file = ond_file or DEFAULT_OND_FILE
         self.params = parse_ond_file(ond_file)
 
-    def __repr__(self):
-        return f"Inverter({self.params})"
-
 class SystemDesign:
-    def __init__(self, system_capacity=None, inverter_count=None, subarray1_gcr=None):
-        self.system_capacity = system_capacity
+    def __init__(self, kwac=None, target_dcac_ratio=1.35, inverter_count=None, subarray1_nstrings=None, subarray1_modules_per_string=None, 
+                 subarray1_track_mode=1, subarray1_tilt=0.0, subarray1_azimuth=180.0, subarray1_backtrack=1, subarray1_gcr=0.33, 
+                 mppt_low_inverter=250.0, mppt_hi_inverter=800.0, system_voltage=1500):
+        self.kwac = kwac if kwac is not None else 100000  # Default 100,000 kW (100 MW)
+        self.target_dcac_ratio = target_dcac_ratio if target_dcac_ratio is not None else 1.35
+        self.system_voltage = system_voltage
+
+        # Compute DC system capacity
+        self.system_capacity = self.kwac * self.target_dcac_ratio
+
         self.inverter_count = inverter_count
+        self.subarray1_nstrings = subarray1_nstrings
+        self.subarray1_modules_per_string = subarray1_modules_per_string
+        self.subarray1_track_mode = subarray1_track_mode
+        self.subarray1_tilt = subarray1_tilt
+        self.subarray1_azimuth = subarray1_azimuth
+        self.subarray1_backtrack = subarray1_backtrack
         self.subarray1_gcr = subarray1_gcr
+        self.mppt_low_inverter = mppt_low_inverter
+        self.mppt_hi_inverter = mppt_hi_inverter
+
+        self.dcac_ratio = None  # Placeholder for actual computed value
+
+    def compute_actual_dcac_ratio(self, module_power_watts=400):
+        if self.subarray1_nstrings and self.subarray1_modules_per_string:
+            total_modules = self.subarray1_nstrings * self.subarray1_modules_per_string
+            total_dc_capacity = total_modules * module_power_watts / 1000  # Convert to kW
+            self.dcac_ratio = total_dc_capacity / self.kwac
+        else:
+            self.dcac_ratio = self.target_dcac_ratio
+
+        return self.dcac_ratio
+
+    def calculate_string_size(self, module_voc, module_tc_voc, design_low_temp):
+        correction = 1 + module_tc_voc / 100 * (design_low_temp - 25)
+        return max(1, int(self.system_voltage / (module_voc * correction)))
 
 class Losses:
     def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=5.0):
@@ -78,16 +90,13 @@ class Losses:
         self.subarray1_soiling = subarray1_soiling
 
 class PVSystem:
-    def __init__(self, lat=None, lon=None, elev=None, tz=None, mwac=None, dcac_ratio=None, module_model="Default Module", 
-                 gcr=None, inverter_efficiency=97.5, solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
-        self.location = Location(lat, lon, elev, tz)
-        self.mwac = mwac
-        self.dcac_ratio = dcac_ratio
+    def __init__(self, kwac=None, target_dcac_ratio=None, module_model="Default Module", 
+                 solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
+        self.kwac = kwac
+        self.target_dcac_ratio = target_dcac_ratio
         self.module_model = module_model
-        self.gcr = gcr
-        self.inverter_efficiency = inverter_efficiency
 
-        self.solar_resource = solar_resource if solar_resource else SolarResource(lat=lat, lon=lon)
+        self.solar_resource = solar_resource if solar_resource else SolarResource()
         self.module = module if module else Module()
         self.inverter = inverter if inverter else Inverter()
         self.system_design = system_design if system_design else SystemDesign()
@@ -98,28 +107,14 @@ class PVSystem:
         self.run_simulation()
 
     def compute_pysam_inputs(self):
-        DEFAULT_MWAC = 100
-        DEFAULT_DCAC_RATIO = 1.35
-        DEFAULT_GCR = 0.3
-
-        self.mwac = self.mwac if self.mwac is not None else DEFAULT_MWAC
-        self.dcac_ratio = self.dcac_ratio if self.dcac_ratio is not None else DEFAULT_DCAC_RATIO
-        self.gcr = self.gcr if self.gcr is not None else DEFAULT_GCR
-
-        self.system_capacity = mw_to_kw(self.mwac) * self.dcac_ratio
-        
-        module_power_watts = 400
-        total_modules = w_to_kw(self.system_capacity * 1000) / module_power_watts
-        modules_per_string = 20
-        n_strings = total_modules // modules_per_string
-
+        self.system_capacity = self.system_design.system_capacity
         self.pysam_inputs = {
             "system_capacity": self.system_capacity,
-            "subarray1_nstrings": n_strings,
-            "subarray1_modules_per_string": modules_per_string,
-            "subarray1_gcr": self.gcr,
-            "inverter_count": round(mw_to_kw(self.mwac) / (self.dcac_ratio * 4000)),
-            "inv_ds_eff": self.inverter_efficiency
+            "subarray1_nstrings": self.system_design.subarray1_nstrings,
+            "subarray1_modules_per_string": self.system_design.subarray1_modules_per_string,
+            "subarray1_gcr": self.system_design.subarray1_gcr,
+            "inverter_count": self.system_design.inverter_count,
+            "inv_ds_eff": self.inverter.params.get("inv_ds_eff", 97.5)
         }
 
     def assign_inputs(self):
@@ -141,12 +136,3 @@ class PVSystem:
             },
             "hourly_energy_data": self.model.Outputs.ac_gross
         }
-
-    def update_parameter(self, param: str, value):
-        if hasattr(self, param):
-            setattr(self, param, value)
-            self.compute_pysam_inputs()
-            self.assign_inputs()
-            self.run_simulation()
-        else:
-            log_error(f"Parameter '{param}' not found in PVSystem")
