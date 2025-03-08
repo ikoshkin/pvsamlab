@@ -1,8 +1,9 @@
 import os
+import json
 import requests
 import PySAM.Pvsamv1 as pv
-import PySAM.Wfreader as wf
-from pvsamlab.utils import log_info, log_error, fetch_weather_file, mw_to_kw, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
+import PySAM.Wfreader as wf  # ✅ Corrected weather file reader import
+from pvsamlab.utils import log_info, log_error, fetch_weather_file, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
 
 # Define default file paths
 PAN_FILE_DIR = os.path.join(os.path.dirname(__file__), "data/modules")
@@ -17,6 +18,9 @@ class Location:
         self.lon = lon if lon is not None else 0.0
         self.elev = elev if elev is not None else 0.0
         self.tz = tz if tz is not None else 0
+
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
 
 class SolarResource:
     def __init__(self, solar_resource_file=None, solar_resource_data=None, lat=None, lon=None, use_wf_albedo=0, dataset_type="TMY"):
@@ -33,11 +37,17 @@ class SolarResource:
 
         self.solar_resource_data = solar_resource_data
 
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
+
 class Module:
     def __init__(self, pan_file=None):
         self.module_model = 2
         pan_file = pan_file or DEFAULT_PAN_FILE
         self.params = parse_pan_file(pan_file)
+
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
 
 class Inverter:
     def __init__(self, ond_file=None):
@@ -45,15 +55,17 @@ class Inverter:
         ond_file = ond_file or DEFAULT_OND_FILE
         self.params = parse_ond_file(ond_file)
 
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
+
 class SystemDesign:
     def __init__(self, kwac=None, target_dcac_ratio=1.35, inverter_count=None, subarray1_nstrings=None, subarray1_modules_per_string=None, 
                  subarray1_track_mode=1, subarray1_tilt=0.0, subarray1_azimuth=180.0, subarray1_backtrack=1, subarray1_gcr=0.33, 
                  mppt_low_inverter=250.0, mppt_hi_inverter=800.0, system_voltage=1500):
-        self.kwac = kwac if kwac is not None else 100000  # Default 100,000 kW (100 MW)
+        self.kwac = kwac if kwac is not None else 100000  # Default to 100,000 kW (100 MW)
         self.target_dcac_ratio = target_dcac_ratio if target_dcac_ratio is not None else 1.35
         self.system_voltage = system_voltage
 
-        # Compute DC system capacity
         self.system_capacity = self.kwac * self.target_dcac_ratio
 
         self.inverter_count = inverter_count
@@ -67,7 +79,7 @@ class SystemDesign:
         self.mppt_low_inverter = mppt_low_inverter
         self.mppt_hi_inverter = mppt_hi_inverter
 
-        self.dcac_ratio = None  # Placeholder for actual computed value
+        self.dcac_ratio = None  # Placeholder for computed value
 
     def compute_actual_dcac_ratio(self, module_power_watts=400):
         if self.subarray1_nstrings and self.subarray1_modules_per_string:
@@ -79,15 +91,17 @@ class SystemDesign:
 
         return self.dcac_ratio
 
-    def calculate_string_size(self, module_voc, module_tc_voc, design_low_temp):
-        correction = 1 + module_tc_voc / 100 * (design_low_temp - 25)
-        return max(1, int(self.system_voltage / (module_voc * correction)))
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
 
 class Losses:
     def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=5.0):
         self.acwiring_loss = acwiring_loss
         self.subarray1_dcwiring_loss = subarray1_dcwiring_loss
         self.subarray1_soiling = subarray1_soiling
+
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
 
 class PVSystem:
     def __init__(self, kwac=None, target_dcac_ratio=None, module_model="Default Module", 
@@ -136,3 +150,6 @@ class PVSystem:
             },
             "hourly_energy_data": self.model.Outputs.ac_gross
         }
+
+    def __repr__(self):
+        return json.dumps(vars(self), indent=4)
