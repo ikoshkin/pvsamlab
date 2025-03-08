@@ -2,7 +2,7 @@ import os
 import json
 import requests
 import PySAM.Pvsamv1 as pv
-import PySAM.Wfreader as wf  # ✅ Corrected weather file reader import
+import PySAM.Wfreader as wf
 from pvsamlab.utils import log_info, log_error, fetch_weather_file, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
 
 # Define default file paths
@@ -37,6 +37,9 @@ class SolarResource:
 
         self.solar_resource_data = solar_resource_data
 
+    def assign_inputs(self, model):
+        model.SolarResource.assign(vars(self))
+
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
 
@@ -46,6 +49,9 @@ class Module:
         pan_file = pan_file or DEFAULT_PAN_FILE
         self.params = parse_pan_file(pan_file)
 
+    def assign_inputs(self, model):
+        model.Module.assign(self.params)
+
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
 
@@ -54,6 +60,9 @@ class Inverter:
         self.inverter_model = 1
         ond_file = ond_file or DEFAULT_OND_FILE
         self.params = parse_ond_file(ond_file)
+
+    def assign_inputs(self, model):
+        model.Inverter.assign(self.params)
 
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
@@ -79,7 +88,7 @@ class SystemDesign:
         self.mppt_low_inverter = mppt_low_inverter
         self.mppt_hi_inverter = mppt_hi_inverter
 
-        self.dcac_ratio = None  # Placeholder for computed value
+        self.dcac_ratio = None
 
     def compute_actual_dcac_ratio(self, module_power_watts=400):
         if self.subarray1_nstrings and self.subarray1_modules_per_string:
@@ -91,6 +100,9 @@ class SystemDesign:
 
         return self.dcac_ratio
 
+    def assign_inputs(self, model):
+        model.SystemDesign.assign(vars(self))
+
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
 
@@ -100,12 +112,15 @@ class Losses:
         self.subarray1_dcwiring_loss = subarray1_dcwiring_loss
         self.subarray1_soiling = subarray1_soiling
 
+    def assign_inputs(self, model):
+        model.Losses.assign(vars(self))
+
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
 
 class PVSystem:
     def __init__(self, kwac=None, target_dcac_ratio=None, module_model="Default Module", 
-                 solar_resource=None, system_design=None, losses=None, module=None, inverter=None):
+                 solar_resource=None, system_design=None, losses=None, module=None, inverter=None, location=None):
         self.kwac = kwac
         self.target_dcac_ratio = target_dcac_ratio
         self.module_model = module_model
@@ -115,25 +130,20 @@ class PVSystem:
         self.inverter = inverter if inverter else Inverter()
         self.system_design = system_design if system_design else SystemDesign()
         self.losses = losses if losses else Losses()
+        self.location = location if location else Location()  # ✅ Location is now included
 
-        self.compute_pysam_inputs()
         self.assign_inputs()
         self.run_simulation()
 
-    def compute_pysam_inputs(self):
-        self.system_capacity = self.system_design.system_capacity
-        self.pysam_inputs = {
-            "system_capacity": self.system_capacity,
-            "subarray1_nstrings": self.system_design.subarray1_nstrings,
-            "subarray1_modules_per_string": self.system_design.subarray1_modules_per_string,
-            "subarray1_gcr": self.system_design.subarray1_gcr,
-            "inverter_count": self.system_design.inverter_count,
-            "inv_ds_eff": self.inverter.params.get("inv_ds_eff", 97.5)
-        }
-
     def assign_inputs(self):
+        """Assigns inputs to the correct PySAM model sections."""
         self.model = pv.default("FlatPlatePVNone")
-        self.model.SystemDesign.assign(self.pysam_inputs)
+
+        self.solar_resource.assign_inputs(self.model)
+        self.module.assign_inputs(self.model)
+        self.inverter.assign_inputs(self.model)
+        self.system_design.assign_inputs(self.model)
+        self.losses.assign_inputs(self.model)
 
     def run_simulation(self):
         self.model.execute()
@@ -143,7 +153,7 @@ class PVSystem:
         self.outputs = {
             "max_dc_voltage": self.model.Outputs.dc_voltage_max,
             "mwh_per_year": self.model.Outputs.annual_energy / 1000,
-            "capacity_factor": calculate_capacity_factor(self.model.Outputs.annual_energy / 1000, self.system_capacity),
+            "capacity_factor": calculate_capacity_factor(self.model.Outputs.annual_energy / 1000, self.system_design.system_capacity),
             "energy_losses_summary": {
                 "inverter_efficiency_loss": self.model.Outputs.annual_ac_inv_eff_loss_percent,
                 "soiling_loss": self.model.Outputs.annual_dc_soiling_loss_percent

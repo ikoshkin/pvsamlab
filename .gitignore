@@ -9,4 +9,4 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
-.log
+*.log
