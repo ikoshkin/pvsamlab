@@ -1,7 +1,7 @@
 import os
 import requests
 import PySAM.Pvsamv1 as pv
-import PySAM.WeatherFile as wf
+import PySAM.Wfreader as wf
 from pvsamlab.utils import log_info, log_error, fetch_weather_file, mw_to_kw, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
 
 # Define default file paths

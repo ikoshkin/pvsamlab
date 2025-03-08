@@ -2,7 +2,7 @@ import os
 import logging
 import pandas as pd
 import pvlib
-import PySAM.WeatherFile as wf
+import PySAM.Wfreader as wf  # ✅ Corrected import for weather file reader
 
 # Configure logging
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
