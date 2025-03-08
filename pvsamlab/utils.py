@@ -65,10 +65,26 @@ def w_to_kw(watts):
     """Convert watts (W) to kilowatts (kW)."""
     return watts / 1000
 
-def calculate_capacity_factor(mwh_per_year, system_capacity_kw):
-    """Calculates capacity factor as a percentage."""
+def calculate_capacity_factor(mwh_per_year, kwac):
+    """Calculates capacity factor as a percentage based on kWac."""
     hours_per_year = 8760
-    return (mwh_per_year / (system_capacity_kw * hours_per_year)) * 100
+    return (mwh_per_year / (kwac * hours_per_year)) * 100
+
+def calculate_string_size(module_voc, module_tc_voc, design_low_temp, system_voltage):
+    """
+    Calculates the optimal number of modules per string.
+
+    Args:
+        module_voc (float): Open-circuit voltage of the module (V).
+        module_tc_voc (float): Temperature coefficient of voltage (%/°C).
+        design_low_temp (float): Lowest design temperature (°C).
+        system_voltage (int): System DC voltage (V).
+
+    Returns:
+        int: Optimal number of modules per string.
+    """
+    correction = 1 + module_tc_voc / 100 * (design_low_temp - 25)
+    return max(1, int(system_voltage / (module_voc * correction)))
 
 def parse_pan_file(pan_file):
     """
@@ -123,7 +139,6 @@ def parse_ond_file(ond_file):
         return {}
 
     try:
-        # Read OND file (assuming it’s structured as CSV or similar)
         ond_data = pd.read_csv(ond_file, delimiter=";")
 
         extracted_params = {
