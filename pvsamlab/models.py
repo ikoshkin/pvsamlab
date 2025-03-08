@@ -71,7 +71,7 @@ class SystemDesign:
     def __init__(self, kwac=None, target_dcac_ratio=1.35, inverter_count=None, subarray1_nstrings=None, subarray1_modules_per_string=None, 
                  subarray1_track_mode=1, subarray1_tilt=0.0, subarray1_azimuth=180.0, subarray1_backtrack=1, subarray1_gcr=0.33, 
                  mppt_low_inverter=250.0, mppt_hi_inverter=800.0, system_voltage=1500):
-        self.kwac = kwac if kwac is not None else 100000  # Default to 100,000 kW (100 MW)
+        self.kwac = kwac if kwac is not None else 100000
         self.target_dcac_ratio = target_dcac_ratio if target_dcac_ratio is not None else 1.35
         self.system_voltage = system_voltage
 
@@ -88,18 +88,6 @@ class SystemDesign:
         self.mppt_low_inverter = mppt_low_inverter
         self.mppt_hi_inverter = mppt_hi_inverter
 
-        self.dcac_ratio = None
-
-    def compute_actual_dcac_ratio(self, module_power_watts=400):
-        if self.subarray1_nstrings and self.subarray1_modules_per_string:
-            total_modules = self.subarray1_nstrings * self.subarray1_modules_per_string
-            total_dc_capacity = total_modules * module_power_watts / 1000  # Convert to kW
-            self.dcac_ratio = total_dc_capacity / self.kwac
-        else:
-            self.dcac_ratio = self.target_dcac_ratio
-
-        return self.dcac_ratio
-
     def assign_inputs(self, model):
         model.SystemDesign.assign(vars(self))
 
@@ -107,10 +95,11 @@ class SystemDesign:
         return json.dumps(vars(self), indent=4)
 
 class Losses:
-    def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=5.0):
+    def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=None, transmission_loss=1.0):
         self.acwiring_loss = acwiring_loss
         self.subarray1_dcwiring_loss = subarray1_dcwiring_loss
-        self.subarray1_soiling = subarray1_soiling
+        self.subarray1_soiling = subarray1_soiling if subarray1_soiling else [5.0] * 12
+        self.transmission_loss = transmission_loss
 
     def assign_inputs(self, model):
         model.Losses.assign(vars(self))
@@ -130,7 +119,7 @@ class PVSystem:
         self.inverter = inverter if inverter else Inverter()
         self.system_design = system_design if system_design else SystemDesign()
         self.losses = losses if losses else Losses()
-        self.location = location if location else Location()  # ✅ Location is now included
+        self.location = location if location else Location()
 
         self.assign_inputs()
         self.run_simulation()
@@ -143,7 +132,7 @@ class PVSystem:
         self.module.assign_inputs(self.model)
         self.inverter.assign_inputs(self.model)
         self.system_design.assign_inputs(self.model)
-        self.losses.assign_inputs(self.model)
+        self.losses.assign_inputs(self.model)  # ✅ Now properly passing Losses inputs
 
     def run_simulation(self):
         self.model.execute()
