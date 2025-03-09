@@ -1,7 +1,7 @@
 import os
 import logging
 import pandas as pd
-import pvlib
+from pvlib.iotools import read_panond
 import PySAM.Wfreader as wf  # ✅ Corrected import for weather file reader
 
 # Configure logging
@@ -88,7 +88,7 @@ def calculate_string_size(module_voc, module_tc_voc, design_low_temp, system_vol
 
 def parse_pan_file(pan_file):
     """
-    Parses a .PAN file using pvlib and extracts relevant module parameters.
+    Parses a .PAN file using the latest pvlib library and extracts relevant module parameters.
 
     Args:
         pan_file (str): Path to the .PAN file.
@@ -101,21 +101,44 @@ def parse_pan_file(pan_file):
         return {}
 
     try:
-        pan_data = pvlib.pvsystem.read_pan(pan_file)
+        # Read .PAN file using pvlib.iotools.read_panond()
+        pan_data = read_panond(pan_file)
 
+        # Detect the correct PVObject key (with or without BOM)
+        pv_object_key = next((k for k in pan_data.keys() if "PVObject_" in k), None)
+        if not pv_object_key:
+            log_error(f"⚠️ PAN file format issue: Missing 'PVObject_' key in {pan_file}")
+            return {}
+
+        pan_object = pan_data.get(pv_object_key, {})
+
+        # Extract module parameters
         extracted_params = {
-            "v_oc": pan_data["Voc_ref"],
-            "i_sc": pan_data["Isc_ref"],
-            "v_mp": pan_data["Vmp_ref"],
-            "i_mp": pan_data["Imp_ref"],
-            "area": pan_data.get("Area", 1.6),
-            "n_series": pan_data["Cells_in_Series"],
-            "t_noct": pan_data.get("T_NOCT", 45),
-            "standoff": pan_data.get("Standoff", 6),
-            "mounting": pan_data.get("Mounting", 1),
-            "is_bifacial": int(pan_data.get("Bifacial", 0)),
-            "bifacial_transmission_factor": pan_data.get("Bifacial_Trans_Factor", 0.95),
-            "bifaciality": pan_data.get("Bifaciality", 0.7)
+            "manufacturer": pan_object.get("PVObject_Commercial", {}).get("Manufacturer", "Unknown"),
+            "model": pan_object.get("PVObject_Commercial", {}).get("Model", "Unknown"),
+            "width": pan_object.get("PVObject_Commercial", {}).get("Width", 1.0),
+            "height": pan_object.get("PVObject_Commercial", {}).get("Height", 2.0),
+            "technology": pan_object.get("Technol", "Unknown"),
+            "n_series": pan_object.get("NCelS", 60),
+            "n_parallel": pan_object.get("NCelP", 1),
+            "n_diodes": pan_object.get("NDiode", 3),
+            "submodule_layout": pan_object.get("SubModuleLayout", "Standard"),
+            "v_oc": pan_object.get("Voc", 0),
+            "i_sc": pan_object.get("Isc", 0),
+            "v_mp": pan_object.get("Vmp", 0),
+            "i_mp": pan_object.get("Imp", 0),
+            "area": pan_object.get("Width", 1.134) * pan_object.get("Height", 2.382),  # Compute module area
+            "muIsc": pan_object.get("muISC", 0),
+            "muVoc": pan_object.get("muVocSpec", 0),
+            "muPmp": pan_object.get("muPmpReq", 0),
+            "r_shunt": pan_object.get("RShunt", 700),
+            "r_series": pan_object.get("RSerie", 0.152),
+            "gamma": pan_object.get("Gamma", 1.065),
+            "muGamma": pan_object.get("muGamma", -0.0004),
+            "max_voltage_iec": pan_object.get("VMaxIEC", 1500),
+            "max_voltage_ul": pan_object.get("VMaxUL", 1500),
+            "bifaciality": pan_object.get("BifacialityFactor", 0.8),
+            "iam_profile": pan_object.get("PVObject_IAM", {}).get("IAMProfile", {}).get("Point_1", [])[1:],  # Extract IAM curve if available
         }
 
         log_info(f"✅ Successfully parsed PAN file: {pan_file}")

@@ -5,12 +5,18 @@ import PySAM.Pvsamv1 as pv
 import PySAM.Wfreader as wf
 from pvsamlab.utils import log_info, log_error, fetch_weather_file, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
 
-# Define default file paths
-PAN_FILE_DIR = os.path.join(os.path.dirname(__file__), "data/modules")
-DEFAULT_PAN_FILE = os.path.join(PAN_FILE_DIR, "JAM66D45-640LB(3.2+2.0mm).PAN")
+# Define paths dynamically based on the current working directory (repo root)
+DATA_DIR = os.path.join(os.getcwd(), "data")
+PAN_FILE_DIR = os.path.join(DATA_DIR, "modules")
+OND_FILE_DIR = os.path.join(DATA_DIR, "inverters")
 
-OND_FILE_DIR = os.path.join(os.path.dirname(__file__), "data/inverters")
+# Default file paths
+DEFAULT_PAN_FILE = os.path.join(PAN_FILE_DIR, "JAM66D45-640LB(3.2+2.0mm).PAN")
 DEFAULT_OND_FILE = os.path.join(OND_FILE_DIR, "Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND")
+
+# Ensure directories exist to prevent errors
+os.makedirs(PAN_FILE_DIR, exist_ok=True)
+os.makedirs(OND_FILE_DIR, exist_ok=True)
 
 class Location:
     def __init__(self, lat=None, lon=None, elev=None, tz=None):
@@ -23,7 +29,7 @@ class Location:
         return json.dumps(vars(self), indent=4)
 
 class SolarResource:
-    def __init__(self, solar_resource_file=None, solar_resource_data=None, lat=None, lon=None, use_wf_albedo=0, dataset_type="TMY"):
+    def __init__(self, solar_resource_file=None, lat=None, lon=None, use_wf_albedo=0, dataset_type="TMY"):
         self.use_wf_albedo = use_wf_albedo
         self.irrad_mode = 0
         self.sky_model = 2
@@ -35,8 +41,6 @@ class SolarResource:
         else:
             self.solar_resource_file = "data/weather_files/default_weather.csv"
 
-        self.solar_resource_data = solar_resource_data
-
     def assign_inputs(self, model):
         model.SolarResource.assign(vars(self))
 
@@ -46,14 +50,38 @@ class SolarResource:
 class Module:
     def __init__(self, pan_file=None):
         self.module_model = 2
-        pan_file = pan_file or DEFAULT_PAN_FILE
-        self.params = parse_pan_file(pan_file)
+        self.pan_file = pan_file or DEFAULT_PAN_FILE
+
+        # Check if the file exists, log error if missing
+        if not os.path.exists(self.pan_file):
+            log_error(f"❌ PAN file not found: {self.pan_file}")
+
+        # Parse full PAN file
+        self.params = parse_pan_file(self.pan_file)
 
     def assign_inputs(self, model):
-        model.Module.assign(self.params)
+        """Filters and assigns only PySAM-compatible module parameters."""
+        pysam_params = {
+            "module_model": 2,  # Always `6par_user`
+            "sixpar_voc": self.params.get("v_oc"),
+            "sixpar_isc": self.params.get("i_sc"),
+            "sixpar_vmp": self.params.get("v_mp"),
+            "sixpar_imp": self.params.get("i_mp"),
+            "sixpar_area": self.params.get("area"),
+            "sixpar_nser": self.params.get("n_series"),
+            "sixpar_tnoct": self.params.get("t_noct", 45),
+            "sixpar_standoff": self.params.get("standoff", 6),
+            "sixpar_mounting": self.params.get("mounting", 1),
+            "sixpar_is_bifacial": int(self.params.get("bifaciality", 0) > 0),
+            "sixpar_bifacial_transmission_factor": self.params.get("bifacial_transmission_factor", 0.95),
+            "sixpar_bifaciality": self.params.get("bifaciality", 0.7),
+        }
+
+        model.Module.assign(pysam_params)  # ✅ Assign only PySAM-compatible values
 
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
+
 
 class Inverter:
     def __init__(self, ond_file=None):
@@ -95,11 +123,23 @@ class SystemDesign:
         return json.dumps(vars(self), indent=4)
 
 class Losses:
-    def __init__(self, acwiring_loss=1.0, subarray1_dcwiring_loss=2.0, subarray1_soiling=None, transmission_loss=1.0):
+    def __init__(self, acwiring_loss=1.0, dcoptimizer_loss=0.5, subarray1_dcwiring_loss=2.0, subarray1_diodeconn_loss=0.5,
+                 subarray1_mismatch_loss=1.0, subarray1_nameplate_loss=1.0, subarray1_rack_shading=0.5, subarray1_rear_soiling_loss=1.0,
+                 subarray1_soiling=None, subarray1_tracking_loss=0.5, transmission_loss=1.0, transformer_no_load_loss=0.0,
+                 transformer_load_loss=0.0):
         self.acwiring_loss = acwiring_loss
+        self.dcoptimizer_loss = dcoptimizer_loss
         self.subarray1_dcwiring_loss = subarray1_dcwiring_loss
+        self.subarray1_diodeconn_loss = subarray1_diodeconn_loss
+        self.subarray1_mismatch_loss = subarray1_mismatch_loss
+        self.subarray1_nameplate_loss = subarray1_nameplate_loss
+        self.subarray1_rack_shading = subarray1_rack_shading
+        self.subarray1_rear_soiling_loss = subarray1_rear_soiling_loss
         self.subarray1_soiling = subarray1_soiling if subarray1_soiling else [5.0] * 12
+        self.subarray1_tracking_loss = subarray1_tracking_loss
         self.transmission_loss = transmission_loss
+        self.transformer_no_load_loss = transformer_no_load_loss
+        self.transformer_load_loss = transformer_load_loss
 
     def assign_inputs(self, model):
         model.Losses.assign(vars(self))
@@ -125,30 +165,27 @@ class PVSystem:
         self.run_simulation()
 
     def assign_inputs(self):
-        """Assigns inputs to the correct PySAM model sections."""
         self.model = pv.default("FlatPlatePVNone")
 
         self.solar_resource.assign_inputs(self.model)
         self.module.assign_inputs(self.model)
         self.inverter.assign_inputs(self.model)
         self.system_design.assign_inputs(self.model)
-        self.losses.assign_inputs(self.model)  # ✅ Now properly passing Losses inputs
+        self.losses.assign_inputs(self.model)
 
     def run_simulation(self):
         self.model.execute()
         self.process_outputs()
 
-    def process_outputs(self):
-        self.outputs = {
-            "max_dc_voltage": self.model.Outputs.dc_voltage_max,
-            "mwh_per_year": self.model.Outputs.annual_energy / 1000,
-            "capacity_factor": calculate_capacity_factor(self.model.Outputs.annual_energy / 1000, self.system_design.system_capacity),
-            "energy_losses_summary": {
-                "inverter_efficiency_loss": self.model.Outputs.annual_ac_inv_eff_loss_percent,
-                "soiling_loss": self.model.Outputs.annual_dc_soiling_loss_percent
-            },
-            "hourly_energy_data": self.model.Outputs.ac_gross
-        }
-
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
+    
+if __name__ == "__main__":
+    # Define location
+    location = Location(lat=37.7749, lon=-122.4194, elev=61.0, tz=-8)
+
+    # Define PV system
+    pv_system = PVSystem(kwac=1000, target_dcac_ratio=1.35, module_model="JAM66D45-640LB(3.2+2.0mm).PAN", location=location)
+
+    # Print the PV system object
+    print(pv_system)
