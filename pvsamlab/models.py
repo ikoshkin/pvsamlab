@@ -3,9 +3,9 @@ import json
 import requests
 import PySAM.Pvsamv1 as pv
 import PySAM.Wfreader as wf
-from pvsamlab.utils import log_info, log_error, fetch_weather_file, w_to_kw, calculate_capacity_factor, parse_pan_file, parse_ond_file
+from pvsamlab.utils import log_info, log_error, fetch_weather_file, parse_pan_file, parse_ond_file
 
-# Define paths dynamically based on the current working directory (repo root)
+# Define default paths
 DATA_DIR = os.path.join(os.getcwd(), "data")
 PAN_FILE_DIR = os.path.join(DATA_DIR, "modules")
 OND_FILE_DIR = os.path.join(DATA_DIR, "inverters")
@@ -14,7 +14,7 @@ OND_FILE_DIR = os.path.join(DATA_DIR, "inverters")
 DEFAULT_PAN_FILE = os.path.join(PAN_FILE_DIR, "JAM66D45-640LB(3.2+2.0mm).PAN")
 DEFAULT_OND_FILE = os.path.join(OND_FILE_DIR, "Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND")
 
-# Ensure directories exist to prevent errors
+# Ensure directories exist
 os.makedirs(PAN_FILE_DIR, exist_ok=True)
 os.makedirs(OND_FILE_DIR, exist_ok=True)
 
@@ -49,10 +49,9 @@ class SolarResource:
 
 class Module:
     def __init__(self, pan_file=None):
-        self.module_model = 2
+        self.module_model = 2  # Always `6par_user`
         self.pan_file = pan_file or DEFAULT_PAN_FILE
 
-        # Check if the file exists, log error if missing
         if not os.path.exists(self.pan_file):
             log_error(f"❌ PAN file not found: {self.pan_file}")
 
@@ -60,9 +59,10 @@ class Module:
         self.params = parse_pan_file(self.pan_file)
 
     def assign_inputs(self, model):
-        """Filters and assigns only PySAM-compatible module parameters."""
+        """Assigns module-related parameters to PySAM."""
+        model.Module.assign({"module_model": 2})
+
         pysam_params = {
-            "module_model": 2,  # Always `6par_user`
             "sixpar_voc": self.params.get("v_oc"),
             "sixpar_isc": self.params.get("i_sc"),
             "sixpar_vmp": self.params.get("v_mp"),
@@ -75,19 +75,25 @@ class Module:
             "sixpar_is_bifacial": int(self.params.get("bifaciality", 0) > 0),
             "sixpar_bifacial_transmission_factor": self.params.get("bifacial_transmission_factor", 0.95),
             "sixpar_bifaciality": self.params.get("bifaciality", 0.7),
+            "sixpar_bvoc": self.params.get("muVoc", 0) / 1000 * self.params.get("v_oc", 1),
+            "sixpar_aisc": self.params.get("muIsc", 0) / 1000 * self.params.get("i_sc", 1),
+            "sixpar_gpmp": self.params.get("muPmp", 0),
         }
 
-        model.Module.assign(pysam_params)  # ✅ Assign only PySAM-compatible values
+        model.CECPerformanceModelWithUserEnteredSpecifications.assign(pysam_params)
 
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
 
-
 class Inverter:
     def __init__(self, ond_file=None):
         self.inverter_model = 1
-        ond_file = ond_file or DEFAULT_OND_FILE
-        self.params = parse_ond_file(ond_file)
+        self.ond_file = ond_file or DEFAULT_OND_FILE
+
+        if not os.path.exists(self.ond_file):
+            log_error(f"❌ OND file not found: {self.ond_file}")
+
+        self.params = parse_ond_file(self.ond_file)
 
     def assign_inputs(self, model):
         model.Inverter.assign(self.params)
@@ -113,11 +119,19 @@ class SystemDesign:
         self.subarray1_azimuth = subarray1_azimuth
         self.subarray1_backtrack = subarray1_backtrack
         self.subarray1_gcr = subarray1_gcr
-        self.mppt_low_inverter = mppt_low_inverter
-        self.mppt_hi_inverter = mppt_hi_inverter
 
     def assign_inputs(self, model):
-        model.SystemDesign.assign(vars(self))
+        pysam_params = {
+            "system_capacity": self.system_capacity,
+            "inverter_count": self.inverter_count,
+            "subarray1_nstrings": self.subarray1_nstrings,
+            "subarray1_modules_per_string": self.subarray1_modules_per_string,
+            "subarray1_track_mode": self.subarray1_track_mode,
+            "subarray1_tilt": self.subarray1_tilt,
+            "subarray1_backtrack": self.subarray1_backtrack,
+            "subarray1_gcr": self.subarray1_gcr,
+        }
+        model.SystemDesign.assign(pysam_params)
 
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
@@ -157,7 +171,7 @@ class PVSystem:
         self.solar_resource = solar_resource if solar_resource else SolarResource()
         self.module = module if module else Module()
         self.inverter = inverter if inverter else Inverter()
-        self.system_design = system_design if system_design else SystemDesign()
+        self.system_design = system_design if system_design else SystemDesign(kwac, target_dcac_ratio)
         self.losses = losses if losses else Losses()
         self.location = location if location else Location()
 
