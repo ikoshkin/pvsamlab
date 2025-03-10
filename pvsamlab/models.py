@@ -98,6 +98,53 @@ class Inverter:
     #         record_as_dict = json.loads(results.head(1).squeeze().to_json())
     #         return cls(**record_as_dict)
 
+@dataclass
+class Losses:
+    acwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    calculate_bifacial_electrical_mismatch: float = field(default=1.0, metadata={"constraints": {"boolean": True}, "required": False})
+    calculate_rack_shading: float = field(default=0.0, metadata={"constraints": {"boolean": True}, "required": False})
+    dcoptimizer_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    en_snow_model: float = field(default=0.0, metadata={"constraints": {"boolean": True}, "required": False})
+    snow_slide_coefficient: float = field(default=1.97, metadata={"required": False})
+    subarray1_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_mismatch_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_nameplate_loss: float = field(default=0.0, metadata={"constraints": {"min": -5, "max": 100}, "required": True})
+    subarray1_rack_shading: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray1_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": True})
+    subarray1_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    subarray2_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_mismatch_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_nameplate_loss: float = field(default=0.0, metadata={"constraints": {"min": -5, "max": 100}, "required": False})
+    subarray2_rack_shading: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray2_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
+    subarray2_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_mismatch_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_nameplate_loss: float = field(default=0.0, metadata={"constraints": {"min": -5, "max": 100}, "required": False})
+    subarray3_rack_shading: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray3_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
+    subarray3_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_mismatch_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_nameplate_loss: float = field(default=0.0, metadata={"constraints": {"min": -5, "max": 100}, "required": False})
+    subarray4_rack_shading: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    subarray4_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
+    subarray4_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    transformer_load_loss: float = field(default=0.0, metadata={"required": False})
+    transformer_no_load_loss: float = field(default=0.0, metadata={"required": False})
+    transmission_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
 
 @dataclass
 class System:
@@ -197,7 +244,8 @@ class System:
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
         # Model
-        # self.model = SSCmodel(generate_ssc_input(self))
+        self.model = self.model = pv.default("FlatPlatePVNone")
+        assign_pysam_values(self)
         # self.model.run()
 
 
@@ -206,7 +254,86 @@ def calculate_string_size(module: Module, design_low_temp, system_voltage):
     correction = 1 + module.tc_voc / 100 * (design_low_temp - 25)
     return floor(system_voltage / (module.voc * correction))
 
-def assign_
+def assign_pysam_values(plant: System):
+    # Assign values to the PySAM model
+
+    solar_resource_params = {
+        'solar_resource_file': plant.weather_file,
+        'irrad_mode': 1,
+        'sky_model': 2,
+        'use_wf_albedo': 0,
+        'albedo': [0.20] * 12
+    }
+    plant.model.SolarResource.assign(solar_resource_params)
+
+    module_params = {
+        'module_model': plant.module_model,
+    }
+    plant.model.Module.assign(module_params)
+
+    sixpar_params = {
+        'sixpar_celltech': plant.module.cell,
+        'sixpar_vmp': plant.module.vmp,
+        'sixpar_imp': plant.module.imp,
+        'sixpar_voc': plant.module.voc,
+        'sixpar_isc': plant.module.isc,
+        'sixpar_bvoc': plant.module.tc_voc * plant.module.voc/100,
+        'sixpar_aisc': plant.module.tc_isc * plant.module.isc/100,
+        'sixpar_gpmp': plant.module.tc_pmax,
+        'sixpar_nser': plant.module.n_series,
+        'sixpar_area': round(plant.module.length * plant.module.width, 2),
+        'sixpar_tnoct': plant.module.noct,
+        'sixpar_standoff': 6,
+        'sixpar_mounting': 1,
+        'sixpar_is_bifacial': int(plant.module.is_bifacial),
+        'sixpar_bifacial_transmission_factor': plant.module.bifacial_transmission_factor,
+        'sixpar_bifaciality': plant.module.bifaciality,
+        'sixpar_bifacial_ground_clearance_height': plant.bifacial_ground_clearance
+    }
+    plant.model.CECPerformanceModelWithUserEnteredSpecifications.assign(sixpar_params)
+
+    inverter_params = {
+        'inverter_model': 1,
+
+        'mppt_low_inverter': plant.inverter.vmp_min,
+        'mppt_hi_inverter': plant.inverter.vmp_max,
+        'inv_num_mppt': plant.inverter_mppt_input,
+        'inv_ds_paco': plant.inverter.pac_max,
+        'inv_ds_eff': plant.inverter.eff_max,
+        'inv_ds_pnt': plant.inverter.night_loss,
+        'inv_ds_pso': plant.inverter.pdc_min,
+        'inv_ds_vdco': plant.inverter.vmp_min,
+    }
+    plant.model.Inverter.assign(inverter_params)
+
+    system_design_params = {
+        'system_capacity': plant.kwdc,
+        'inverter_count': plant.n_inverters,
+        
+        'subarray1_nstrings': plant.n_strings,
+        'subarray1_modules_per_string': plant.n_series,
+        'subarray1_mppt_input': plant.inverter_mppt_input,
+        'subarray1_tilt': plant.tilt,
+        'subarray1_azimuth': plant.azimuth,
+        'subarray1_backtrack': plant.tracking_mode,
+        'subarray1_rotlim': plant.rotation_limit,
+
+        'subarray1_gcr': plant.gcr,
+        'subarray1_monthly_tilt': [],
+    }
+    plant.model.SystemDesign.assign(system_design_params)
+
+    losses_params = {
+        'dc_degradation': 0.7,
+        'dc_degrade_factor': 1.0,
+        'en_dc_lifetime_losses': 0,
+        'dc_lifetime_losses': 0,
+        'en_ac_lifetime_losses': 0,
+        'ac_lifetime_losses': 0,
+        'en_snow_model': 0,
+        'en_batt': 0,
+        'adjust:constant': 1.0
+    }
 
 
 def generate_ssc_input(plant: System):
