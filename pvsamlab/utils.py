@@ -1,8 +1,10 @@
 import os
 import logging
 import pandas as pd
+from scipy import spatial
 from pvlib.iotools import read_panond
-import PySAM.Wfreader as wf  # ✅ Corrected import for weather file reader
+import PySAM.Wfreader as wf  # Corrected import for weather file reader
+from pkg_resources import resource_filename
 
 # Configure logging
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
@@ -34,7 +36,7 @@ def fetch_weather_file(lat, lon, dataset_type="TMY", api_key="your_nsrdb_api_key
     Returns:
         str: Path to the downloaded or existing weather file.
     """
-    weather_folder = "data/weather_files"
+    weather_folder = resource_filename(__name__, 'data/weather_files')
     os.makedirs(weather_folder, exist_ok=True)
 
     file_name = f"weather_{lat}_{lon}_{dataset_type}.csv"
@@ -176,3 +178,70 @@ def parse_ond_file(ond_file):
     except Exception as e:
         log_error(f"⚠️ Error parsing OND file: {e}")
         return {}
+
+api_key = 'DEMO_KEY'
+your_name = 'Lolo+Pepe'
+email = 'lolo@pepe.com'
+attrs = 'dhi,dni,ghi,air_temperature,surface_pressure,wind_direction,wind_speed'
+
+def download_nsrdb_csv(coords, year='tmy', attributes=attrs):
+    """
+    Downloads solar resource file in csv format from NSRDB to a local folder.
+
+    Args:
+        lat (float): latitude
+        lon (float): longitude
+        year (str): 'tmy' or '1998' through '2016'
+        attribute (str): list of values to be included
+    Returns:
+        wfname (str): path to downloaded file
+    """
+
+    lat, lon = coords
+    weather_folder = resource_filename(__name__, 'data/tmp')
+    os.makedirs(weather_folder, exist_ok=True)
+    wfname = os.path.join(weather_folder, f'{coords}_nsrdb_{year}.csv')
+    
+    if os.path.isfile(wfname):
+        return wfname
+
+    url = (f'http://developer.nrel.gov/api/solar/nsrdb_psm3_download.csv?'
+           f'api_key={api_key}&'
+           f'full_name={your_name}'
+           f'&email={email}'
+           f'&affiliation=lolopepe'
+           f'&reason=Prospecting'
+           f'&mailing_list=true'
+           f'&wkt=POINT({lon}+{lat})'
+           f'&names={year}'
+           f'&attributes={attributes}'
+           f'&leap_day=false'
+           f'&utc=false'
+           f'&interval=60')
+    try:
+        wdf = pd.read_csv(url)   
+        wdf.to_csv(wfname, index=False)
+        return wfname
+    except Exception as e:
+        log_error(f"❌ Error downloading NSRDB data: {e}")
+        return None
+
+def find_nearest(point, set_of_points):
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.query.html
+
+    tree = spatial.KDTree(set_of_points)
+    distance, index_of_nearest = tree.query(point)
+    return index_of_nearest
+
+def get_ashrae_design_low(lat, lon):
+    ashrae_db_path = resource_filename(__name__, 'data/_ashraeDB.csv')
+    
+    if not os.path.exists(ashrae_db_path):
+        log_error(f"❌ ASHRAE database file not found: {ashrae_db_path}")
+        return None
+
+    df = pd.read_csv(ashrae_db_path)
+    stations = df.loc[:, ['Lat', 'Lon']].values
+    nearest_station_index = find_nearest((lat, lon), stations)
+    
+    return df.loc[nearest_station_index, 'ExtrLow']
