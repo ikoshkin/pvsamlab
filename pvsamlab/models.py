@@ -42,7 +42,13 @@ class SolarResource:
             self.solar_resource_file = "data/weather_files/default_weather.csv"
 
     def assign_inputs(self, model):
-        model.SolarResource.assign(vars(self))
+        pysam_params = {
+            "solar_resource_file": self.solar_resource_file,
+            "use_wf_albedo": self.use_wf_albedo,
+            "irrad_mode": self.irrad_mode,
+            "sky_model": self.sky_model,
+        }
+        model.SolarResource.assign(pysam_params)
 
     def __repr__(self):
         return json.dumps(vars(self), indent=4)
