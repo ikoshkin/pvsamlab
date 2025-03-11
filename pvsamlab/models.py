@@ -106,6 +106,7 @@ class Losses:
     dcoptimizer_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
     en_snow_model: float = field(default=0.0, metadata={"constraints": {"boolean": True}, "required": False})
     snow_slide_coefficient: float = field(default=1.97, metadata={"required": False})
+    
     subarray1_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
     subarray1_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
     subarray1_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
@@ -115,6 +116,7 @@ class Losses:
     subarray1_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
     subarray1_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": True})
     subarray1_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
+    
     subarray2_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray2_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray2_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
@@ -125,6 +127,7 @@ class Losses:
     subarray2_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
     subarray2_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray3_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    
     subarray3_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray3_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray3_mismatch_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
@@ -133,6 +136,7 @@ class Losses:
     subarray3_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray3_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
     subarray3_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    
     subarray4_dcwiring_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray4_diodeconn_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray4_electrical_mismatch: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
@@ -142,6 +146,7 @@ class Losses:
     subarray4_rear_soiling_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
     subarray4_soiling: List[float] = field(default_factory=lambda: [0.0]*12, metadata={"constraints": {"length": 12}, "required": False})
     subarray4_tracking_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": False})
+    
     transformer_load_loss: float = field(default=0.0, metadata={"required": False})
     transformer_no_load_loss: float = field(default=0.0, metadata={"required": False})
     transmission_loss: float = field(default=0.0, metadata={"constraints": {"min": 0, "max": 100}, "required": True})
@@ -334,6 +339,7 @@ def assign_pysam_values(plant: System):
         'en_batt': 0,
         'adjust:constant': 1.0
     }
+    plant.model.Losses.assign(losses_params)
 
 
 def generate_ssc_input(plant: System):
