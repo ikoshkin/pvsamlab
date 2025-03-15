@@ -200,6 +200,9 @@ class System:
     kwac: float = field(init=False)
     kwdc: float = field(init=False)
 
+    # Losses
+    losses: Losses = field(default_factory=Losses)
+
     # Model
     # model: SSCmodel = field(init=False)
 
@@ -305,9 +308,9 @@ def assign_pysam_values(plant: System):
         'inv_num_mppt': plant.inverter_mppt_input,
         'inv_ds_paco': plant.inverter.pac_max,
         'inv_ds_eff': plant.inverter.eff_max,
-        'inv_ds_pnt': plant.inverter.night_loss,
-        'inv_ds_pso': plant.inverter.pdc_min,
-        'inv_ds_vdco': plant.inverter.vmp_min,
+        # 'inv_ds_pnt': plant.inverter.night_loss,
+        # 'inv_ds_pso': plant.inverter.pdc_min,
+        # 'inv_ds_vdco': plant.inverter.vmp_min,
     }
     plant.model.Inverter.assign(inverter_params)
 
@@ -324,20 +327,29 @@ def assign_pysam_values(plant: System):
         'subarray1_rotlim': plant.rotation_limit,
 
         'subarray1_gcr': plant.gcr,
-        'subarray1_monthly_tilt': [],
+        # 'subarray1_monthly_tilt': [],
     }
     plant.model.SystemDesign.assign(system_design_params)
 
     losses_params = {
-        'dc_degradation': 0.7,
-        'dc_degrade_factor': 1.0,
-        'en_dc_lifetime_losses': 0,
-        'dc_lifetime_losses': 0,
-        'en_ac_lifetime_losses': 0,
-        'ac_lifetime_losses': 0,
-        'en_snow_model': 0,
-        'en_batt': 0,
-        'adjust:constant': 1.0
+        'acwiring_loss': plant.losses.acwiring_loss,
+        'calculate_bifacial_electrical_mismatch': plant.losses.calculate_bifacial_electrical_mismatch,
+        'calculate_rack_shading': plant.losses.calculate_rack_shading,
+        'dcoptimizer_loss': plant.losses.dcoptimizer_loss,
+        'en_snow_model': plant.losses.en_snow_model,
+        'snow_slide_coefficient': plant.losses.snow_slide_coefficient,
+        'subarray1_dcwiring_loss': plant.losses.subarray1_dcwiring_loss,
+        'subarray1_diodeconn_loss': plant.losses.subarray1_diodeconn_loss,
+        'subarray1_electrical_mismatch': plant.losses.subarray1_electrical_mismatch,
+        'subarray1_mismatch_loss': plant.losses.subarray1_mismatch_loss,
+        'subarray1_nameplate_loss': plant.losses.subarray1_nameplate_loss,
+        'subarray1_rack_shading': plant.losses.subarray1_rack_shading,
+        'subarray1_rear_soiling_loss': plant.losses.subarray1_rear_soiling_loss,
+        'subarray1_soiling': plant.losses.subarray1_soiling,
+        'subarray1_tracking_loss': plant.losses.subarray1_tracking_loss,
+        'transformer_load_loss': plant.losses.transformer_load_loss,
+        'transformer_no_load_loss': plant.losses.transformer_no_load_loss,
+        'transmission_loss': plant.losses.transmission_loss
     }
     plant.model.Losses.assign(losses_params)
 
