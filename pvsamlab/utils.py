@@ -39,7 +39,7 @@ def fetch_weather_file(lat, lon, dataset_type="TMY", api_key="your_nsrdb_api_key
     weather_folder = resource_filename(__name__, 'data/weather_files')
     os.makedirs(weather_folder, exist_ok=True)
 
-    file_name = f"weather_{lat}_{lon}_{dataset_type}.csv"
+    file_name = f"weather_{lat}_{lon}_{dataset_type}.csv" ## TODO refine file name
     file_path = os.path.join(weather_folder, file_name)
 
     if os.path.exists(file_path):
@@ -48,7 +48,7 @@ def fetch_weather_file(lat, lon, dataset_type="TMY", api_key="your_nsrdb_api_key
 
     log_info(f"🌍 Downloading {dataset_type} weather data for lat: {lat}, lon: {lon}...")
     try:
-        weather_data = wf.SRWdownload(lat, lon, api_key=api_key)
+        weather_data = wf.SRWdownload(lat, lon, api_key=api_key) ## FIXME weather downloader (api)
         if weather_data:
             with open(file_path, "w") as f:
                 f.write(weather_data)

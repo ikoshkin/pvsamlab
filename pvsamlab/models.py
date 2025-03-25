@@ -254,7 +254,20 @@ class System:
         # Model
         self.model = self.model = pv.default("FlatPlatePVNone")
         assign_pysam_values(self)
-        # self.model.run()
+        self.model.execute()
+        self.process_outputs()
+
+    def process_outputs(self):
+        self.outputs = {
+            # "max_dc_voltage": self.model.Outputs.dc_voltage_max,
+            "mwh_per_year": self.model.Outputs.annual_energy / 1000,
+            # "capacity_factor": calculate_capacity_factor(self.model.Outputs.annual_energy / 1000, self.system_design.system_capacity),
+            "energy_losses_summary": {
+                "inverter_efficiency_loss": self.model.Outputs.annual_ac_inv_eff_loss_percent,
+                # "soiling_loss": self.model.Outputs.annual_dc_soiling_loss_percent
+            },
+            "hourly_energy_data": self.model.Outputs.ac_gross
+        }
 
 
 def calculate_string_size(module: Module, design_low_temp, system_voltage):
@@ -353,7 +366,7 @@ def assign_pysam_values(plant: System):
     }
     plant.model.Losses.assign(losses_params)
 
-
+#### TODO Remove ssc inputs
 def generate_ssc_input(plant: System):
     ssc_input = {}
 
@@ -365,7 +378,7 @@ def generate_ssc_input(plant: System):
     ssc_input['system_use_lifetime_output'] = 0
     ssc_input['analysis_period'] = 1
     ssc_input['dc_degradation'] = 0.7
-    ssc_input['dc_degrade_factor'] = 1.0
+    ssc_input['dc_degrade_factor'] = 1.0  
     ssc_input['en_dc_lifetime_losses'] = 0
     ssc_input['dc_lifetime_losses'] = 0
     ssc_input['en_ac_lifetime_losses'] = 0
@@ -515,14 +528,13 @@ def generate_ssc_input(plant: System):
     ssc_input['inv_tdc_ds'] = plant.inv_tdc_ds
 
     ssc_input['en_batt'] = 0
-
     ssc_input['adjust:constant'] = 1.0
 
     return ssc_input
 
 if __name__ == '__main__':
     plant = System()
-    print(plant.model.ac_monthly)
+    print(plant.outputs.get('mwh_per_year'))
     # print(plant.model.ac_annual)
     # print(plant.model.dc_monthly)
     # print(plant.model.dc_annual)
