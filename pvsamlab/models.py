@@ -252,7 +252,7 @@ class System:
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
         # Model
-        self.model = self.model = pv.default("FlatPlatePVNone")
+        self.model = pv.default("FlatPlatePVNone")
         assign_pysam_values(self)
         self.model.execute()
         self.process_outputs()
