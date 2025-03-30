@@ -4,7 +4,7 @@ PV Simulation module.
 Defines classes to run pv models
 """
 import numpy as np
-from .samsdk.sscapi import PySSC
+
 import copy
 
 ssc = PySSC()

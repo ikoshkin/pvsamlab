@@ -1,0 +1,435 @@
+Help on Losses object:
+
+class Losses(builtins.object)
+ |  Methods defined here:
+ |
+ |  assign(...)
+ |      assign(dict) -> None
+ |       Assign attributes from dictionary, overwriting but not removing values.
+ |
+ |      ``Losses_vals = { var: val, ...}``
+ |
+ |  export(...)
+ |      export() -> dict
+ |      Export attributes into dictionary.
+ |
+ |  replace(...)
+ |      replace(dict) -> None
+ |       Replace attributes from dictionary, unassigning values not present in input ``dict``.
+ |
+ |      ``Losses_vals = { var: val, ...}``
+ |
+ |  ----------------------------------------------------------------------
+ |  Data descriptors defined here:
+ |
+ |  acwiring_loss
+ |      *float*: AC wiring loss [%]
+ |
+ |      **Info:**
+ |      percent of inverter AC output
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  calculate_bifacial_electrical_mismatch
+ |      *float*: Calculate bifacial electrical mismatch
+ |
+ |      **Constraints:**
+ |      BOOLEAN
+ |
+ |      **Required:**
+ |      False. Automatically set to 1 if not assigned explicitly or loaded from defaults.
+ |
+ |  calculate_rack_shading
+ |      *float*: Calculate rack shading
+ |
+ |      **Constraints:**
+ |      BOOLEAN
+ |
+ |      **Required:**
+ |      False. Automatically set to 0 if not assigned explicitly or loaded from defaults.
+ |
+ |  dcoptimizer_loss
+ |      *float*: DC power optimizer loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  en_snow_model
+ |      *float*: Toggle snow loss estimation [0/1]
+ |
+ |      **Constraints:**
+ |      BOOLEAN
+ |
+ |      **Required:**
+ |      False. Automatically set to 0 if not assigned explicitly or loaded from defaults.
+ |
+ |  snow_slide_coefficient
+ |      *float*: Snow Slide Coefficient
+ |
+ |      **Required:**
+ |      False. Automatically set to 1.97 if not assigned explicitly or loaded from defaults.
+ |
+ |  subarray1_dcwiring_loss
+ |      *float*: Sub-array 1 DC wiring loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_diodeconn_loss
+ |      *float*: Sub-array 1 DC diodes and connections loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_electrical_mismatch
+ |      *float*: Sub-array 1 bifacial electrical mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_mismatch_loss
+ |      *float*: Sub-array 1 DC mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_nameplate_loss
+ |      *float*: Sub-array 1 DC nameplate loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=-5,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_rack_shading
+ |      *float*: Sub-array 1 rack shading loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_rear_soiling_loss
+ |      *float*: Sub-array 1 rear soiling loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_soiling
+ |      *sequence*: Sub-array 1 Monthly soiling loss [%]
+ |
+ |      **Constraints:**
+ |      LENGTH=12
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray1_tracking_loss
+ |      *float*: Sub-array 1 DC tracking error loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+ |
+ |  subarray2_dcwiring_loss
+ |      *float*: Sub-array 2 DC wiring loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_diodeconn_loss
+ |      *float*: Sub-array 2 DC diodes and connections loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_electrical_mismatch
+ |      *float*: Sub-array 2 bifacial electrical mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_mismatch_loss
+ |      *float*: Sub-array 2 DC mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_nameplate_loss
+ |      *float*: Sub-array 2 DC nameplate loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=-5,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_rack_shading
+ |      *float*: Sub-array 2 rack shading loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_rear_soiling_loss
+ |      *float*: Sub-array 2 rear soiling loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_soiling
+ |      *sequence*: Sub-array 2 Monthly soiling loss [%]
+ |
+ |      **Constraints:**
+ |      LENGTH=12
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray2_tracking_loss
+ |      *float*: Sub-array 2 DC tracking error loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray2_enable=1
+ |
+ |  subarray3_dcwiring_loss
+ |      *float*: Sub-array 3 DC wiring loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_diodeconn_loss
+ |      *float*: Sub-array 3 DC diodes and connections loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_electrical_mismatch
+ |      *float*: Sub-array 3 bifacial electrical mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_mismatch_loss
+ |      *float*: Sub-array 3 DC mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_nameplate_loss
+ |      *float*: Sub-array 3 DC nameplate loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=-5,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_rack_shading
+ |      *float*: Sub-array 3 rack shading loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_rear_soiling_loss
+ |      *float*: Sub-array 3 rear soiling loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_soiling
+ |      *sequence*: Sub-array 3 Monthly soiling loss [%]
+ |
+ |      **Constraints:**
+ |      LENGTH=12
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray3_tracking_loss
+ |      *float*: Sub-array 3 DC tracking error loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray3_enable=1
+ |
+ |  subarray4_dcwiring_loss
+ |      *float*: Sub-array 4 DC wiring loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_diodeconn_loss
+ |      *float*: Sub-array 4 DC diodes and connections loss [%]
+ |
+ |      **Info:**
+ |      ?
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_electrical_mismatch
+ |      *float*: Sub-array 4 bifacial electrical mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_mismatch_loss
+ |      *float*: Sub-array 4 DC mismatch loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_nameplate_loss
+ |      *float*: Sub-array 4 DC nameplate loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=-5,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_rack_shading
+ |      *float*: Sub-array 4 rack shading loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_rear_soiling_loss
+ |      *float*: Sub-array 4 rear soiling loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_soiling
+ |      *sequence*: Sub-array 4 Monthly soiling loss [%]
+ |
+ |      **Constraints:**
+ |      LENGTH=12
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  subarray4_tracking_loss
+ |      *float*: Sub-array 4 DC tracking error loss [%]
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      Required if subarray4_enable=1
+ |
+ |  transformer_load_loss
+ |      *float*: Power transformer load loss [%]
+ |
+ |      **Info:**
+ |      percent of AC output
+ |
+ |      **Required:**
+ |      False. Automatically set to 0 if not assigned explicitly or loaded from defaults.
+ |
+ |  transformer_no_load_loss
+ |      *float*: Power transformer no load loss [%]
+ |
+ |      **Info:**
+ |      percent of inverter AC capacity
+ |
+ |      **Required:**
+ |      False. Automatically set to 0 if not assigned explicitly or loaded from defaults.
+ |
+ |  transmission_loss
+ |      *float*: Transmission loss [%]
+ |
+ |      **Info:**
+ |      percent of AC output after transformer losses
+ |
+ |      **Constraints:**
+ |      MIN=0,MAX=100
+ |
+ |      **Required:**
+ |      True
+

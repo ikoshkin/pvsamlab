@@ -7,15 +7,18 @@ import csv
 from dataclasses import dataclass, field, asdict, InitVar
 from typing import List
 from math import floor
+from pprint import pprint
 
 import pandas as pd
 
 import sys
 from pathlib import Path
 
-from .components import Module, Inverter
-from .model import SSCmodel
-from .climate import download_nsrdb_csv, get_ashrae_design_low
+import PySAM.Pvsamv1 as pv
+
+from pvsamlab.components import Module, Inverter
+# from pvsamlab.model import SSCmodel
+from pvsamlab.climate import download_nsrdb_csv, get_ashrae_design_low
 
 
 class TrackingMode:
@@ -49,7 +52,7 @@ class System:
     design_low_temp: str = field(init=False)
 
     # Modules
-    module: Module = Module()
+    module: Module = field(default_factory=Module)  # Fixed mutable default
     module_model: int = 2  # {2:6par, 5:mlm}
 
     # String Sizing
@@ -69,7 +72,7 @@ class System:
     bifacial_ground_clearance: float = 1.0
 
     # Inverters
-    inverter: Inverter = Inverter()
+    inverter: Inverter = field(default_factory=Inverter)  # Fixed mutable default
     inverter_derate: float = 2000/2200
     inverter_pac_derated: float = field(init=False)
     n_inverters: int = field(init=False)
@@ -85,7 +88,7 @@ class System:
     kwdc: float = field(init=False)
 
     # Model
-    model: SSCmodel = field(init=False)
+    model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))  # Fixed mutable default
 
     # Builder (kind of)
     def __post_init__(self, target_kwac, target_dcac, met_year):
@@ -133,8 +136,23 @@ class System:
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
         # Model
-        self.model = SSCmodel(generate_ssc_input(self))
-        self.model.run()
+        # self.model.assign(generate_pysam_inputs(self))
+        self.model.replace(generate_pysam_inputs(self))
+        print(self.model.SystemDesign.inverter_count)
+        # self.model.assign({'SolarResource':{
+        #             "albedo": [0.2] * 12,
+        #             "albedo_spatial": [[]],
+        #             "irrad_mode": 1,
+        #             "sky_model": 2,
+        #             'solar_resource_data':{},
+        #             'solar_resource_file': self.weather_file,
+        #             "use_spatial_albedos": 0,
+        #             "use_wf_albedo": 0,
+        #             }
+        #             })
+                          
+        self.model.execute()
+        self.model_results = process_outputs(self)
 
 
 def calculate_string_size(module: Module, design_low_temp, system_voltage):
@@ -147,7 +165,7 @@ def generate_pysam_inputs(plant: System):
     pysam_inputs = {
         'SolarResource': {
             "albedo": [0.2] * 12,
-            "albedo_spatial": [],
+            "albedo_spatial": [[]],
             "irrad_mode": 1,
             "sky_model": 2,
             'solar_resource_data':{},
@@ -158,7 +176,7 @@ def generate_pysam_inputs(plant: System):
 
         'Losses': {
             "acwiring_loss": 0.80,
-            "calculate_bifacial_electrical_mismatch": 1,
+            "calculate_bifacial_electrical_mismatch": 0,
             "calculate_rack_shading": 1,
             "dcoptimizer_loss": 0.0,
             "en_snow_model": 0,
@@ -212,14 +230,14 @@ def generate_pysam_inputs(plant: System):
         'Lifetime': {},
 
         'SystemDesign': {
-            'enable_mismatch_vmax_calc': 1,
+            'enable_mismatch_vmax_calc': 0,
             'inverter_count': plant.n_inverters,
 
             'subarray1_azimuth': plant.azimuth,
-            'subarray1_backtrack': plant.backtracking,
+            'subarray1_backtrack': int(plant.backtracking),
             'subarray1_gcr': plant.gcr,
             'subarray1_modules_per_string': plant.n_series,
-            'subarray1_monthly_tilt': (),
+            # 'subarray1_monthly_tilt': [plant.tilt] * 12,
             'subarray1_mppt_input': 1,
             'subarray1_nstrings': plant.n_strings,
             'subarray1_rotlim': plant.rotation_limit,
@@ -228,12 +246,17 @@ def generate_pysam_inputs(plant: System):
             'subarray1_tilt': plant.tilt,
             'subarray1_tilt_eq_lat': 0,
             'subarray1_track_mode': TrackingMode.SAT,
+            # 'subarray1_use_custom_cell_temp': 0,
+            # 'subarray1_use_custom_rot_angles': 0,
+            # 'subarray1_custom_cell_temp_array': []
+            # 'subarray1_custom_rot_angles_array': [],
 
+            'subarray2_enable': 0,
             'subarray2_azimuth': plant.azimuth,
             'subarray2_backtrack': plant.backtracking,
             'subarray2_gcr': plant.gcr,
             'subarray2_modules_per_string': plant.n_series,
-            'subarray2_monthly_tilt': (),
+            # 'subarray2_monthly_tilt': [],
             'subarray2_mppt_input': 1,
             'subarray2_nstrings': plant.n_strings,
             'subarray2_rotlim': plant.rotation_limit,
@@ -242,12 +265,17 @@ def generate_pysam_inputs(plant: System):
             'subarray2_tilt': plant.tilt,
             'subarray2_tilt_eq_lat': 0,
             'subarray2_track_mode': TrackingMode.SAT,
+            # 'subarray2_use_custom_cell_temp': 0,
+            # 'subarray2_use_custom_rot_angles': 0,
+            # 'subarray2_custom_cell_temp_array': [],
+            # 'subarray2_custom_rot_angles_array': [],
 
+            'subarray3_enable': 0,
             'subarray3_azimuth': plant.azimuth,
             'subarray3_backtrack': plant.backtracking,
             'subarray3_gcr': plant.gcr,
             'subarray3_modules_per_string': plant.n_series,
-            'subarray3_monthly_tilt': (),
+            # 'subarray3_monthly_tilt': [],
             'subarray3_mppt_input': 1,
             'subarray3_nstrings': plant.n_strings,
             'subarray3_rotlim': plant.rotation_limit,
@@ -256,12 +284,17 @@ def generate_pysam_inputs(plant: System):
             'subarray3_tilt': plant.tilt,
             'subarray3_tilt_eq_lat': 0,
             'subarray3_track_mode': TrackingMode.SAT,
+            # 'subarray3_use_custom_cell_temp': 0,
+            # 'subarray3_use_custom_rot_angles': 0,
+            # 'subarray3_custom_cell_temp_array': [],
+            # 'subarray3_custom_rot_angles_array': [],
 
+            'subarray4_enable': 0,
             'subarray4_azimuth': plant.azimuth,
             'subarray4_backtrack': plant.backtracking,
             'subarray4_gcr': plant.gcr,
             'subarray4_modules_per_string': plant.n_series,
-            'subarray4_monthly_tilt': (),
+            # 'subarray4_monthly_tilt': [],
             'subarray4_mppt_input': 1,
             'subarray4_nstrings': plant.n_strings,
             'subarray4_rotlim': plant.rotation_limit,
@@ -270,6 +303,10 @@ def generate_pysam_inputs(plant: System):
             'subarray4_tilt': plant.tilt,
             'subarray4_tilt_eq_lat': 0,
             'subarray4_track_mode': TrackingMode.SAT,
+            # 'subarray4_use_custom_cell_temp': 0,
+            # 'subarray4_use_custom_rot_angles': 0,
+            # 'subarray4_custom_cell_temp_array': [],
+            # 'subarray4_custom_rot_angles_array': [],
 
             'system_capacity': plant.kwdc
             },
@@ -369,11 +406,11 @@ def generate_pysam_inputs(plant: System):
             'sixpar_voc': plant.module.voc
             },
 
-        'SimpleEfficiencyModuleModel': {},
-        'CECPerformanceModelWithModuleDatabase': {},
-        'SandiaPVArrayPerformanceModelWithModuleDatabase': {},
-        'IEC61853SingleDiodeModel': {},
-        'MermoudLejeuneSingleDiodeModel': {},
+        # 'SimpleEfficiencyModuleModel': {},
+        # 'CECPerformanceModelWithModuleDatabase': {},
+        # 'SandiaPVArrayPerformanceModelWithModuleDatabase': {},
+        # 'IEC61853SingleDiodeModel': {},
+        # 'MermoudLejeuneSingleDiodeModel': {},
         
         'Inverter': {
             'inv_ds_eff': plant.inverter.eff_max,
@@ -397,13 +434,13 @@ def generate_pysam_inputs(plant: System):
             'inv_tdc_ds': plant.inv_tdc_ds
             },
 
-        'InverterPartLoadCurve': {},
-        'InverterMermoudLejeuneModel': {},
-        'InverterCECDatabase': {},
-        'InverterCECCoefficientGenerator': {},
+        # 'InverterPartLoadCurve': {},
+        # 'InverterMermoudLejeuneModel': {},
+        # 'InverterCECDatabase': {},
+        # 'InverterCECCoefficientGenerator': {},
 
-        'BatterySystem': {'en_batt': 0.0},
-        'Load': {},
+        # 'BatterySystem': {'en_batt': 0.0},
+        # 'Load': {},
 
         'PVLosses': {
             'enable_subhourly_clipping': 0.0,
@@ -418,197 +455,39 @@ def generate_pysam_inputs(plant: System):
             'adjust_timeindex': (0.0,)
             },
 
-        'BatteryCell': {},
-        'BatteryDispatch': {},
-        'SystemCosts': {},
-        'FuelCell': {},
-        'PriceSignal': {},
-        'Revenue': {},
-        'ElectricityRates': {},
+        # 'BatteryCell': {},
+        # 'BatteryDispatch': {},
+        # 'SystemCosts': {},
+        # 'FuelCell': {},
+        # 'PriceSignal': {},
+        # 'Revenue': {},
+        # 'ElectricityRates': {},
 
         'GridLimits': {
             'enable_interconnection_limit': 0.0,
-            'grid_curtailment': (),
+            # 'grid_curtailment': (),
             'grid_interconnection_limit_kwac': 100000.0
             },
 
-        'HybridCosts': {},
+        # 'HybridCosts': {},
+     
         }
     return pysam_inputs
 
-
-
-def generate_ssc_input(plant: System):
-    ssc_input = {}
-
-    ssc_input['solar_resource_file'] = plant.weather_file
-
-    ssc_input['transformer_no_load_loss'] = 0
-    ssc_input['transformer_load_loss'] = 0
-
-    ssc_input['system_use_lifetime_output'] = 0
-    ssc_input['analysis_period'] = 1
-    ssc_input['dc_degradation'] = 0.7
-    ssc_input['dc_degrade_factor'] = 1.0
-    ssc_input['en_dc_lifetime_losses'] = 0
-    ssc_input['dc_lifetime_losses'] = 0
-    ssc_input['en_ac_lifetime_losses'] = 0
-    ssc_input['ac_lifetime_losses'] = 0
-
-    ssc_input['en_snow_model'] = 0
-
-    ssc_input['system_capacity'] = plant.kwdc
-
-    ssc_input['use_wf_albedo'] = 0
-    ssc_input['albedo'] = [0.20] * 12
-
-    ssc_input['irrad_mode'] = 1
-    ssc_input['sky_model'] = 2
-
-    ssc_input['enable_mismatch_vmax_calc'] = 0
-
-    ssc_input['subarray1_nstrings'] = plant.n_strings
-    ssc_input['subarray1_modules_per_string'] = plant.n_series
-    ssc_input['subarray1_mppt_input'] = plant.inverter_mppt_input
-    ssc_input['subarray1_tilt'] = plant.tilt
-    ssc_input['subarray1_tilt_eq_lat'] = 0
-    ssc_input['subarray1_azimuth'] = plant.azimuth
-    ssc_input['subarray1_track_mode'] = plant.tracking_mode
-    ssc_input['subarray1_rotlim'] = plant.rotation_limit
-    ssc_input['subarray1_shade_mode'] = Shading.STANDARD
-    ssc_input['subarray1_gcr'] = plant.gcr
-    ssc_input['subarray1_monthly_tilt'] = []
-    ssc_input['subarray1_shading:string_option'] = -1
-    ssc_input['subarray1_soiling'] = [3.00] * 12
-    ssc_input['subarray1_rear_irradiance_loss'] = 0
-    ssc_input['subarray1_mismatch_loss'] = 0.50
-    ssc_input['subarray1_diodeconn_loss'] = 0.50
-    ssc_input['subarray1_dcwiring_loss'] = 1.50
-    ssc_input['subarray1_tracking_loss'] = 0.50
-    ssc_input['subarray1_nameplate_loss'] = 0.50
-    ssc_input['subarray1_mod_orient'] = plant.module_orientation
-    ssc_input['subarray1_nmodx'] = plant.n_modules_x
-    ssc_input['subarray1_nmody'] = plant.n_modules_y
-    ssc_input['subarray1_backtrack'] = plant.backtracking
-
-    ssc_input['subarray2_enable'] = 0
-    ssc_input['subarray2_tilt'] = 0
-    ssc_input['subarray2_track_mode'] = 0
-    ssc_input['subarray2_shade_mode'] = 0
-
-    ssc_input['subarray3_enable'] = 0
-    ssc_input['subarray3_tilt'] = 0
-    ssc_input['subarray3_track_mode'] = 0
-    ssc_input['subarray3_shade_mode'] = 0
-
-    ssc_input['subarray4_enable'] = 0
-    ssc_input['subarray4_tilt'] = 0
-    ssc_input['subarray4_track_mode'] = 0
-    ssc_input['subarray4_shade_mode'] = 0
-
-    ssc_input['dcoptimizer_loss'] = 0
-    ssc_input['acwiring_loss'] = 1.0
-    ssc_input['transmission_loss'] = 0
-
-    ssc_input['module_model'] = plant.module_model
-    ssc_input['module_aspect_ratio'] = round(
-        plant.module.length/plant.module.width, 2)
-
-    ssc_input['6par_celltech'] = int(plant.module.cell)
-    ssc_input['6par_vmp'] = plant.module.vmp
-    ssc_input['6par_imp'] = plant.module.imp
-    ssc_input['6par_voc'] = plant.module.voc
-    ssc_input['6par_isc'] = plant.module.isc
-    ssc_input['6par_bvoc'] = plant.module.tc_voc * plant.module.voc/100
-    ssc_input['6par_aisc'] = plant.module.tc_isc * plant.module.isc/100
-    ssc_input['6par_gpmp'] = plant.module.tc_pmax
-    ssc_input['6par_nser'] = plant.module.n_series
-    ssc_input['6par_area'] = round(plant.module.length * plant.module.width, 2)
-    ssc_input['6par_tnoct'] = plant.module.noct
-    ssc_input['6par_standoff'] = 6
-    ssc_input['6par_mounting'] = 1
-    ssc_input['6par_is_bifacial'] = int(plant.module.is_bifacial)
-    ssc_input['6par_bifacial_transmission_factor'] = plant.module.bifacial_transmission_factor
-    ssc_input['6par_bifaciality'] = plant.module.bifaciality
-    ssc_input['6par_bifacial_ground_clearance_height'] = plant.bifacial_ground_clearance
-
-    ssc_input['mlm_N_series'] = plant.module.model_params.n_series
-    ssc_input['mlm_N_parallel'] = plant.module.model_params.n_parallel
-    ssc_input['mlm_N_diodes'] = plant.module.model_params.n_diodes
-    ssc_input['mlm_Width'] = plant.module.model_params.width
-    ssc_input['mlm_Length'] = plant.module.model_params.length
-    ssc_input['mlm_V_mp_ref'] = plant.module.model_params.vmp_ref
-    ssc_input['mlm_I_mp_ref'] = plant.module.model_params.imp_ref
-    ssc_input['mlm_V_oc_ref'] = plant.module.model_params.voc_ref
-    ssc_input['mlm_I_sc_ref'] = plant.module.model_params.isc_ref
-    ssc_input['mlm_S_ref'] = plant.module.model_params.irr_ref
-    ssc_input['mlm_T_ref'] = plant.module.model_params.t_ref
-    ssc_input['mlm_R_shref'] = plant.module.model_params.R_shref
-    ssc_input['mlm_R_sh0'] = plant.module.model_params.R_sh0
-    ssc_input['mlm_R_shexp'] = plant.module.model_params.R_shexp
-    ssc_input['mlm_R_s'] = plant.module.model_params.R_s
-    ssc_input['mlm_alpha_isc'] = plant.module.model_params.alpha_isc
-    ssc_input['mlm_beta_voc_spec'] = plant.module.model_params.beta_voc_spec
-    ssc_input['mlm_E_g'] = plant.module.model_params.E_g
-    ssc_input['mlm_n_0'] = plant.module.model_params.n_0
-    ssc_input['mlm_mu_n'] = plant.module.model_params.mu_n
-    ssc_input['mlm_D2MuTau'] = plant.module.model_params.D2MuTau
-    ssc_input['mlm_T_mode'] = plant.module.model_params.T_mode
-    ssc_input['mlm_T_c_no_tnoct'] = plant.module.model_params.T_c_no_tnoct
-    ssc_input['mlm_T_c_no_mounting'] = plant.module.model_params.T_c_no_mounting
-    ssc_input['mlm_T_c_no_standoff'] = plant.module.model_params.T_c_no_standoff
-    ssc_input['mlm_T_c_fa_alpha'] = plant.module.model_params.T_c_fa_alpha
-    ssc_input['mlm_T_c_fa_U0'] = plant.module.model_params.T_c_fa_U0
-    ssc_input['mlm_T_c_fa_U1'] = plant.module.model_params.T_c_fa_U1
-    ssc_input['mlm_AM_mode'] = plant.module.model_params.AM_mode
-    ssc_input['mlm_AM_c_sa0'] = 0
-    ssc_input['mlm_AM_c_sa1'] = 0
-    ssc_input['mlm_AM_c_sa2'] = 0
-    ssc_input['mlm_AM_c_sa3'] = 0
-    ssc_input['mlm_AM_c_sa4'] = 0
-    ssc_input['mlm_AM_c_lp0'] = 0
-    ssc_input['mlm_AM_c_lp1'] = 0
-    ssc_input['mlm_AM_c_lp2'] = 0
-    ssc_input['mlm_AM_c_lp3'] = 0
-    ssc_input['mlm_AM_c_lp4'] = 0
-    ssc_input['mlm_AM_c_lp5'] = 0
-    ssc_input['mlm_IAM_mode'] = plant.module.model_params.IAM_mode
-    ssc_input['mlm_IAM_c_as'] = plant.module.model_params.IAM_c_as
-    ssc_input['mlm_IAM_c_sa0'] = 0
-    ssc_input['mlm_IAM_c_sa1'] = 0
-    ssc_input['mlm_IAM_c_sa2'] = 0
-    ssc_input['mlm_IAM_c_sa3'] = 0
-    ssc_input['mlm_IAM_c_sa4'] = 0
-    ssc_input['mlm_IAM_c_sa5'] = 0
-    ssc_input['mlm_groundRelfectionFraction'] = plant.module.model_params.ground_relfection_fraction
-    ssc_input['mlm_IAM_c_cs_incAngle'] = plant.module.model_params.IAM_c_cs_incAngle
-    ssc_input['mlm_IAM_c_cs_iamValue'] = plant.module.model_params.IAM_c_cs_iamValue
-
-    ssc_input['inverter_model'] = 1
-    ssc_input['inverter_count'] = plant.n_inverters
-
-    ssc_input['mppt_low_inverter'] = plant.inverter.vmp_min
-    ssc_input['mppt_hi_inverter'] = plant.inverter.vmp_max
-    ssc_input['inv_num_mppt'] = plant.inverter_mppt_input
-    ssc_input['inv_ds_paco'] = plant.inverter.pac_max
-    ssc_input['inv_ds_eff'] = plant.inverter.eff_max
-    ssc_input['inv_ds_pnt'] = plant.inverter.night_loss
-    ssc_input['inv_ds_pso'] = plant.inverter.pdc_min
-    ssc_input['inv_ds_vdco'] = plant.inverter.vmp_min
-    ssc_input['inv_ds_vdcmax'] = plant.inverter.vmp_max
-    ssc_input['inv_tdc_ds'] = plant.inv_tdc_ds
-
-    ssc_input['en_batt'] = 0
-
-    ssc_input['adjust:constant'] = 1.0
-
-    return ssc_input
+def process_outputs(plant: System):
+    results = {
+        # 'ac_gross': plant.model.Outputs.ac_gross,
+        'ac_monthly': plant.model.Outputs.monthly_energy,
+        'ac_annual': plant.model.Outputs.annual_energy,
+        'voc_max': max(plant.model.Outputs.subarray1_voc)
+        #     max(plant.model.Outputs.subarray1_voc),
+        #     # max(plant.model.Outputs.subarray2_voc),
+        #     # max(plant.model.Outputs.subarray3_voc),
+        #     # max(plant.model.Outputs.subarray4_voc)
+        # ),
+    }
+    return results
 
 if __name__ == '__main__':
     plant = System()
-    print(plant.model.ac_monthly)
-    print(plant.model.ac_annual)
-    print(plant.model.dc_monthly)
-    print(plant.model.dc_annual)
-    print(plant.model.loss_monthly)
-    print(plant.model.loss_annual)§
+    pprint(plant.model_results)
