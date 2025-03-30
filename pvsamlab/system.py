@@ -17,7 +17,6 @@ from pathlib import Path
 import PySAM.Pvsamv1 as pv
 
 from pvsamlab.components import Module, Inverter
-# from pvsamlab.model import SSCmodel
 from pvsamlab.climate import download_nsrdb_csv, get_ashrae_design_low
 
 
@@ -136,21 +135,9 @@ class System:
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
         # Model
-        # self.model.assign(generate_pysam_inputs(self))
-        self.model.replace(generate_pysam_inputs(self))
-        print(self.model.SystemDesign.inverter_count)
-        # self.model.assign({'SolarResource':{
-        #             "albedo": [0.2] * 12,
-        #             "albedo_spatial": [[]],
-        #             "irrad_mode": 1,
-        #             "sky_model": 2,
-        #             'solar_resource_data':{},
-        #             'solar_resource_file': self.weather_file,
-        #             "use_spatial_albedos": 0,
-        #             "use_wf_albedo": 0,
-        #             }
-        #             })
-                          
+        self.model.assign(generate_pysam_inputs(self))
+        # self.model.replace(generate_pysam_inputs(self))
+
         self.model.execute()
         self.model_results = process_outputs(self)
 
