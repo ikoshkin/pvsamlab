@@ -10,4 +10,4 @@ __pycache__/
 .vscode/
 .DS_Store
 *.log
-.data/tmp/
+pvsamlab/data/tmp/*
