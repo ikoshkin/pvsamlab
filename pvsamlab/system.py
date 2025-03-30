@@ -56,7 +56,7 @@ class System:
 
     # String Sizing
     system_voltage: int = 1500
-    n_series: int = field(init=False)
+    modules_per_string: InitVar[int] = None
 
     # Racking/Orientation
     tracking_mode: int = TrackingMode.SAT
@@ -90,7 +90,7 @@ class System:
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))  # Fixed mutable default
 
     # Builder (kind of)
-    def __post_init__(self, target_kwac, target_dcac, met_year):
+    def __post_init__(self, target_kwac, target_dcac, met_year, modules_per_string):
 
         # Location and meteo
 
@@ -115,11 +115,14 @@ class System:
         self.design_low_temp = get_ashrae_design_low(self.lat, self.lon)
 
         # String Sizing
-        self.n_series = calculate_string_size(self.module,
-                                              self.design_low_temp,
-                                              self.system_voltage)
+        if modules_per_string is not None:
+            self.modules_per_string = modules_per_string
+        else:
+            self.modules_per_string = calculate_string_size(self.module,
+                                    self.design_low_temp,
+                                    self.system_voltage)
         # Racking/Orientation
-        self.n_modules_y = self.n_series
+        self.n_modules_y = self.modules_per_string
 
         # Inverterts
         self.inverter_pac_derated = self.inverter.pac_max * self.inverter_derate
@@ -128,7 +131,7 @@ class System:
         self.inv_tdc_ds = [[1, 52.8, -0.021]]
 
         # Array
-        string_kwdc = self.n_series * self.module.pmax/1000
+        string_kwdc = self.modules_per_string * self.module.pmax/1000
         self.n_strings = round(self.kwac * target_dcac / string_kwdc)
         self.kwdc = round(self.n_strings * string_kwdc, 2)
 
@@ -223,7 +226,7 @@ def generate_pysam_inputs(plant: System):
             'subarray1_azimuth': plant.azimuth,
             'subarray1_backtrack': int(plant.backtracking),
             'subarray1_gcr': plant.gcr,
-            'subarray1_modules_per_string': plant.n_series,
+            'subarray1_modules_per_string': plant.modules_per_string,
             # 'subarray1_monthly_tilt': [plant.tilt] * 12,
             'subarray1_mppt_input': 1,
             'subarray1_nstrings': plant.n_strings,
@@ -242,7 +245,7 @@ def generate_pysam_inputs(plant: System):
             'subarray2_azimuth': plant.azimuth,
             'subarray2_backtrack': plant.backtracking,
             'subarray2_gcr': plant.gcr,
-            'subarray2_modules_per_string': plant.n_series,
+            'subarray2_modules_per_string': plant.modules_per_string,
             # 'subarray2_monthly_tilt': [],
             'subarray2_mppt_input': 1,
             'subarray2_nstrings': plant.n_strings,
@@ -261,7 +264,7 @@ def generate_pysam_inputs(plant: System):
             'subarray3_azimuth': plant.azimuth,
             'subarray3_backtrack': plant.backtracking,
             'subarray3_gcr': plant.gcr,
-            'subarray3_modules_per_string': plant.n_series,
+            'subarray3_modules_per_string': plant.modules_per_string,
             # 'subarray3_monthly_tilt': [],
             'subarray3_mppt_input': 1,
             'subarray3_nstrings': plant.n_strings,
@@ -280,7 +283,7 @@ def generate_pysam_inputs(plant: System):
             'subarray4_azimuth': plant.azimuth,
             'subarray4_backtrack': plant.backtracking,
             'subarray4_gcr': plant.gcr,
-            'subarray4_modules_per_string': plant.n_series,
+            'subarray4_modules_per_string': plant.modules_per_string,
             # 'subarray4_monthly_tilt': [],
             'subarray4_mppt_input': 1,
             'subarray4_nstrings': plant.n_strings,
@@ -464,7 +467,7 @@ def generate_pysam_inputs(plant: System):
 def process_outputs(plant: System):
     results = {
         # 'ac_gross': plant.model.Outputs.ac_gross,
-        'ac_monthly': plant.model.Outputs.monthly_energy,
+        # 'ac_monthly': plant.model.Outputs.monthly_energy,
         'ac_annual': plant.model.Outputs.annual_energy,
         'voc_max': max(plant.model.Outputs.subarray1_voc)
         #     max(plant.model.Outputs.subarray1_voc),
@@ -476,5 +479,8 @@ def process_outputs(plant: System):
     return results
 
 if __name__ == '__main__':
-    plant = System()
-    pprint(plant.model_results)
+    for modules_per_string in range(25, 31):
+        print(f"Running simulation for modules_per_string={modules_per_string}")
+        plant = System(modules_per_string=modules_per_string)
+        pprint(plant.model_results)
+        print("-" * 50)
