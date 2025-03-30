@@ -11,4 +11,5 @@ __pycache__/
 .DS_Store
 *.log
 pvsamlab/data/tmp/*
+pvsamlab/data/weather_files/*
 secrets.env
