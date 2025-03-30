@@ -11,3 +11,4 @@ __pycache__/
 .DS_Store
 *.log
 pvsamlab/data/tmp/*
+secrets.env
