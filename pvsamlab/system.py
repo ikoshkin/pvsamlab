@@ -72,11 +72,11 @@ class System:
     bifacial_ground_clearance: float = 1.0
 
     # Inverters
-    inverter: Inverter = field(default_factory=Inverter)
+    ond_file: InitVar[str] = None
+    inverter: Inverter = field(default=None)
     inverter_derate: float = 2000/2200
     inverter_pac_derated: float = field(init=False)
     n_inverters: int = field(init=False)
-    inverter_mppt_input: int = 1
     inv_tdc_ds: List[float] = field(default_factory=list)
 
     # Array
@@ -90,7 +90,7 @@ class System:
     # Model
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
 
-    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string):
+    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file):
 
         # Location and meteo
         if os.path.exists(met_year):
@@ -121,6 +121,12 @@ class System:
                 self.module, self.design_low_temp, self.system_voltage)
 
         self.n_modules_y = self.modules_per_string
+
+        # Inverter: If ond_file provided, override default module
+        if ond_file:
+            self.inverter = Inverter.from_ond(ond_file)
+        elif self.inverter is None:
+            self.inverter = Inverter()  # Default module only if not already set
 
         # Inverter Sizing
         self.inverter_pac_derated = self.inverter.pac_max * self.inverter_derate
@@ -403,7 +409,7 @@ def generate_pysam_inputs(plant: System):
 
             'mppt_hi_inverter': plant.inverter.vmp_max,
             'mppt_low_inverter': plant.inverter.vmp_min,
-            'inv_num_mppt': plant.inverter_mppt_input,
+            'inv_num_mppt': plant.inverter.inv_num_mppt,
 
             'inverter_count': plant.n_inverters,
             'inverter_model': 1,
@@ -412,8 +418,8 @@ def generate_pysam_inputs(plant: System):
         'InverterDatasheet': {
             'inv_ds_eff': plant.inverter.eff_max,
             'inv_ds_paco': plant.inverter.pac_max,
-            'inv_ds_pnt': 1.0,
-            'inv_ds_pso': plant.inverter.pdc_min,
+            'inv_ds_pnt': plant.inverter.night_loss,
+            'inv_ds_pso': plant.inverter.oper_loss,
             'inv_ds_vdcmax': plant.inverter.vmp_max,
             'inv_ds_vdco': plant.inverter.vmp_min,
             'inv_tdc_ds': plant.inv_tdc_ds
@@ -476,11 +482,13 @@ def process_outputs(plant: System):
 if __name__ == '__main__':
 
     pan_file_ja640 = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/modules/JAM66D45-640LB(3.2+2.0mm).PAN'
+    ond_file_sg4400 = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND'
 
     plant_a = System()
     pprint(plant_a.model_results)
     print("-" * 50)
-    
-    plant = System(pan_file=pan_file_ja640)
+
+    plant = System(pan_file=pan_file_ja640, 
+                   ond_file=ond_file_sg4400)
     pprint(plant.model_results)
     print("-" * 50)
