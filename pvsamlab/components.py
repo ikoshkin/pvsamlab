@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from typing import List
 
 import pandas as pd
+from pvlib.iotools import read_panond
+
+from pvsamlab.utils import parse_pan_file
 
 _dir = os.path.dirname(__file__)
 
@@ -113,6 +116,61 @@ class Module:
         else:
             record_as_dict = json.loads(results.head(1).squeeze().to_json())
             return cls(**record_as_dict)
+    
+    @classmethod
+    def from_pan(cls, pan_file):
+        """
+        Parses a .PAN file using the latest pvlib library and extracts relevant module parameters.
+        Args:
+            pan_file (str): Path to the .PAN file.
+        Returns:
+            Module: Instance of Module class with extracted parameters.
+        """
+        if not os.path.exists(pan_file):
+            raise FileNotFoundError(f"PAN file not found: {pan_file}")
+
+        try:
+            # Read .PAN file using pvlib.iotools.read_panond()
+            pan_data = read_panond(pan_file, encoding='utf-8-sig')
+
+            # Detect the correct PVObject key (with or without BOM)
+            pv_object_key ="PVObject_"
+            pan_dict = pan_data.get(pv_object_key, {})
+
+            # Extract module parameters
+            extracted_params = {
+                "manufacturer": pan_dict.get("PVObject_Commercial", {}).get("Manufacturer", "Unknown"),
+                "model": pan_dict.get("PVObject_Commercial", {}).get("Model", "Unknown"),
+                "cell": {
+                    "mtSiMono": CellTech.MONO,
+                    "mtSiMulti": CellTech.POLY,
+                    "mtCdTe": CellTech.CDTE,
+                    "mtCIS": CellTech.CIS,
+                    "mtCIGS": CellTech.CIGS,
+                    "mtAmorph": CellTech.AMORPH
+                }.get(pan_dict.get("Technol"), CellTech.MONO),
+
+                "pmax": pan_dict.get("PNom"),
+                "vmp": pan_dict.get("Vmp"),
+                "imp": pan_dict.get("Imp"),
+                "voc": pan_dict.get("Voc"),
+                "isc": pan_dict.get("Isc"),
+                "tc_pmax": pan_dict.get("muPmpReq"),
+                "tc_voc": pan_dict.get("muVocSpec") * 100 / pan_dict.get("Voc") / 1000,
+                "tc_isc": pan_dict.get("muISC") * 100 / pan_dict.get("Isc") / 1000,
+                "n_series": pan_dict.get("NCelS"),
+                "length": pan_dict.get("PVObject_Commercial", {}).get("Height"),
+                "width": pan_dict.get("PVObject_Commercial", {}).get("Width"),
+                "noct": 45,
+                "is_bifacial": True if pan_dict.get("BifacialityFactor") > 0 else False,
+                "bifacial_transmission_factor": 0.05,
+                "bifaciality": pan_dict.get("BifacialityFactor"),
+            }
+
+            return cls(**extracted_params)
+
+        except Exception as e:
+            raise RuntimeError(f"Error parsing PAN file: {e}")
 
 
 @dataclass

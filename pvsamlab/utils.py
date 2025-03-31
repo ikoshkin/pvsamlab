@@ -23,42 +23,6 @@ def log_error(message):
     """Logs error messages."""
     logger.error(message)
 
-def fetch_weather_file(lat, lon, dataset_type="TMY", api_key="your_nsrdb_api_key"):
-    """
-    Fetches a weather file from NSRDB if it doesn't exist locally.
-
-    Args:
-        lat (float): Latitude of the location.
-        lon (float): Longitude of the location.
-        dataset_type (str, optional): Type of weather data to fetch (default: "TMY").
-        api_key (str, optional): NSRDB API key for downloading weather files.
-
-    Returns:
-        str: Path to the downloaded or existing weather file.
-    """
-    weather_folder = resource_filename(__name__, 'data/weather_files')
-    os.makedirs(weather_folder, exist_ok=True)
-
-    file_name = f"weather_{lat}_{lon}_{dataset_type}.csv" ## TODO refine file name
-    file_path = os.path.join(weather_folder, file_name)
-
-    if os.path.exists(file_path):
-        log_info(f"✅ Using existing weather file: {file_path}")
-        return file_path
-
-    log_info(f"🌍 Downloading {dataset_type} weather data for lat: {lat}, lon: {lon}...")
-    try:
-        weather_data = wf.SRWdownload(lat, lon, api_key=api_key) ## FIXME weather downloader (api)
-        if weather_data:
-            with open(file_path, "w") as f:
-                f.write(weather_data)
-            log_info(f"✅ Weather file saved to: {file_path}")
-            return file_path
-    except Exception as e:
-        log_error(f"❌ Error fetching weather data: {e}")
-
-    return os.path.join(weather_folder, "default_weather.csv")
-
 def mw_to_kw(mw):
     """Convert megawatts (MW) to kilowatts (kW)."""
     return mw * 1000

@@ -51,7 +51,8 @@ class System:
     design_low_temp: str = field(init=False)
 
     # Modules
-    module: Module = field(default_factory=Module)  # Fixed mutable default
+    pan_file: InitVar[str] = None
+    module: Module = field(default=None)  # Initially None, will set in __post_init__
     module_model: int = 2  # {2:6par, 5:mlm}
 
     # String Sizing
@@ -71,7 +72,7 @@ class System:
     bifacial_ground_clearance: float = 1.0
 
     # Inverters
-    inverter: Inverter = field(default_factory=Inverter)  # Fixed mutable default
+    inverter: Inverter = field(default_factory=Inverter)
     inverter_derate: float = 2000/2200
     inverter_pac_derated: float = field(init=False)
     n_inverters: int = field(init=False)
@@ -87,60 +88,54 @@ class System:
     kwdc: float = field(init=False)
 
     # Model
-    model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))  # Fixed mutable default
+    model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
 
-    # Builder (kind of)
-    def __post_init__(self, target_kwac, target_dcac, met_year, modules_per_string):
+    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string):
 
         # Location and meteo
-
         if os.path.exists(met_year):
             self.weather_file = met_year
-            # print(self.weather_file)
-            # location = pd.read_csv(met_year, nrows=1)
-            # try:
-            #     self.lat = location.Latitude.values[0]
-            #     self.lon = location.Longitude.values[0]
-            # except:
             with open(self.weather_file, newline='') as f:
                 reader = csv.reader(f)
                 tmy_header = next(reader)
                 self.lat = float(tmy_header[4])
                 self.lon = float(tmy_header[5])
-                
         else:
             self.weather_file = download_nsrdb_csv(
                 coords=(self.lat, self.lon), year=met_year)
 
         self.design_low_temp = get_ashrae_design_low(self.lat, self.lon)
 
+        # Modules: If pan_file provided, override default module
+        if pan_file:
+            self.module = Module.from_pan(pan_file)
+        elif self.module is None:
+            self.module = Module()  # Default module only if not already set
+
+
         # String Sizing
         if modules_per_string is not None:
             self.modules_per_string = modules_per_string
         else:
-            self.modules_per_string = calculate_string_size(self.module,
-                                    self.design_low_temp,
-                                    self.system_voltage)
-        # Racking/Orientation
+            self.modules_per_string = calculate_string_size(
+                self.module, self.design_low_temp, self.system_voltage)
+
         self.n_modules_y = self.modules_per_string
 
-        # Inverterts
+        # Inverter Sizing
         self.inverter_pac_derated = self.inverter.pac_max * self.inverter_derate
-        self.n_inverters = floor(target_kwac*1000 / self.inverter_pac_derated)
-        self.kwac = round(self.inverter_pac_derated/1000 * self.n_inverters, 3)
+        self.n_inverters = floor(target_kwac * 1000 / self.inverter_pac_derated)
+        self.kwac = round(self.inverter_pac_derated / 1000 * self.n_inverters, 3)
         self.inv_tdc_ds = [[1, 52.8, -0.021]]
 
-        # Array
-        string_kwdc = self.modules_per_string * self.module.pmax/1000
+        # Array Sizing
+        string_kwdc = self.modules_per_string * self.module.pmax / 1000
         self.n_strings = round(self.kwac * target_dcac / string_kwdc)
         self.kwdc = round(self.n_strings * string_kwdc, 2)
-
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
-        # Model
+        # Model Execution
         self.model.assign(generate_pysam_inputs(self))
-        # self.model.replace(generate_pysam_inputs(self))
-
         self.model.execute()
         self.model_results = process_outputs(self)
 
@@ -479,8 +474,13 @@ def process_outputs(plant: System):
     return results
 
 if __name__ == '__main__':
-    for modules_per_string in range(25, 31):
-        print(f"Running simulation for modules_per_string={modules_per_string}")
-        plant = System(modules_per_string=modules_per_string)
-        pprint(plant.model_results)
-        print("-" * 50)
+
+    pan_file_ja640 = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/modules/JAM66D45-640LB(3.2+2.0mm).PAN'
+
+    plant_a = System()
+    pprint(plant_a.model_results)
+    print("-" * 50)
+    
+    plant = System(pan_file=pan_file_ja640)
+    pprint(plant.model_results)
+    print("-" * 50)
