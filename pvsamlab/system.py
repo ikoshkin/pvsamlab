@@ -18,7 +18,15 @@ import PySAM.Pvsamv1 as pv
 
 from pvsamlab.components import Module, Inverter
 from pvsamlab.climate import download_nsrdb_csv, get_ashrae_design_low
+from pathlib import Path
+import json
 
+
+LATITUDE = 30.9759
+LONGITUDE = -97.2465
+
+PAN_DEFAULT = "pvsamlab/data/modules/JAM66D45-640LB(3.2+2.0mm).PAN"
+OND_DEFAULT = "pvsamlab/data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND"
 
 class TrackingMode:
     FT = 0
@@ -45,13 +53,13 @@ class System:
     met_year: InitVar[str] = 'tmy'
 
     # Location and meteo
-    lat: float = 32.71595
-    lon: float = -101.91084
+    lat: float = LATITUDE
+    lon: float = LONGITUDE
     weather_file: str = field(init=False)
     design_low_temp: str = field(init=False)
 
     # Modules
-    pan_file: InitVar[str] = None
+    pan_file: InitVar[str] = PAN_DEFAULT
     module: Module = field(default=None)  # Initially None, will set in __post_init__
     module_model: int = 2  # {2:6par, 5:mlm}
 
@@ -72,7 +80,7 @@ class System:
     bifacial_ground_clearance: float = 1.0
 
     # Inverters
-    ond_file: InitVar[str] = None
+    ond_file: InitVar[str] = OND_DEFAULT
     inverter: Inverter = field(default=None)
     inverter_derate: float = 2000/2200
     inverter_pac_derated: float = field(init=False)
@@ -107,11 +115,7 @@ class System:
         self.design_low_temp = get_ashrae_design_low(self.lat, self.lon)
 
         # Modules: If pan_file provided, override default module
-        if pan_file:
-            self.module = Module.from_pan(pan_file)
-        elif self.module is None:
-            self.module = Module()  # Default module only if not already set
-
+        self.module = Module.from_pan(pan_file)
 
         # String Sizing
         if modules_per_string is not None:
@@ -123,16 +127,13 @@ class System:
         self.n_modules_y = self.modules_per_string
 
         # Inverter: If ond_file provided, override default module
-        if ond_file:
-            self.inverter = Inverter.from_ond(ond_file)
-        elif self.inverter is None:
-            self.inverter = Inverter()  # Default module only if not already set
+        self.inverter = Inverter.from_ond(ond_file)
 
         # Inverter Sizing
         self.inverter_pac_derated = self.inverter.pac_max * self.inverter_derate
         self.n_inverters = floor(target_kwac * 1000 / self.inverter_pac_derated)
         self.kwac = round(self.inverter_pac_derated / 1000 * self.n_inverters, 3)
-        self.inv_tdc_ds = [[1, 52.8, -0.021]]
+        self.inv_tdc_ds = [[1100,50,-0.01,55,-0.085,60,-0.085]]
 
         # Array Sizing
         string_kwdc = self.modules_per_string * self.module.pmax / 1000
@@ -467,28 +468,83 @@ def generate_pysam_inputs(plant: System):
 
 def process_outputs(plant: System):
     results = {
-        # 'ac_gross': plant.model.Outputs.ac_gross,
-        # 'ac_monthly': plant.model.Outputs.monthly_energy,
+        'met_year': os.path.basename(plant.model.SolarResource.solar_resource_file),
         'ac_annual': plant.model.Outputs.annual_energy,
-        'voc_max': max(plant.model.Outputs.subarray1_voc)
-        #     max(plant.model.Outputs.subarray1_voc),
-        #     # max(plant.model.Outputs.subarray2_voc),
-        #     # max(plant.model.Outputs.subarray3_voc),
-        #     # max(plant.model.Outputs.subarray4_voc)
-        # ),
+        'voc_max': max(plant.model.Outputs.subarray1_voc),
+        'performance_ratio': plant.model.Outputs.performance_ratio,
     }
     return results
 
 if __name__ == '__main__':
 
-    pan_file_ja640 = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/modules/JAM66D45-640LB(3.2+2.0mm).PAN'
-    ond_file_sg4400 = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND'
+    ZERO_LOSS = {'Losses': {
 
-    plant_a = System()
-    pprint(plant_a.model_results)
-    print("-" * 50)
+        "acwiring_loss": 0.0,
+        "calculate_bifacial_electrical_mismatch": 0,
+        "calculate_rack_shading": 0,
+        "dcoptimizer_loss": 0.0,
+        "en_snow_model": 0,
+        "snow_slide_coefficient": 0.0,
 
-    plant = System(pan_file=pan_file_ja640, 
-                   ond_file=ond_file_sg4400)
+        "subarray1_dcwiring_loss": 0.0,
+        "subarray1_diodeconn_loss": 0.0,
+        "subarray1_electrical_mismatch": 0.0,
+        "subarray1_mismatch_loss": 0.0,
+        "subarray1_nameplate_loss": 0.0,
+        "subarray1_rack_shading": 0.0,
+        "subarray1_rear_soiling_loss": 0.0,
+        "subarray1_soiling": [0.0] * 12,
+        "subarray1_tracking_loss": 0.0,
+
+        "subarray2_dcwiring_loss": 0.0,
+        "subarray2_diodeconn_loss": 0.0,
+        "subarray2_electrical_mismatch": 0.0,
+        "subarray2_mismatch_loss": 0.0,
+        "subarray2_nameplate_loss": 0.0,
+        "subarray2_rack_shading": 0.0,
+        "subarray2_rear_soiling_loss": 0.0,
+        "subarray2_soiling": [0.0] * 12,
+        "subarray2_tracking_loss": 0.0,
+
+        "subarray3_dcwiring_loss": 0.0,
+        "subarray3_diodeconn_loss": 0.0,
+        "subarray3_electrical_mismatch": 0.0,
+        "subarray3_mismatch_loss": 0.0,
+        "subarray3_nameplate_loss": 0.0,
+        "subarray3_rack_shading": 0.0,
+        "subarray3_rear_soiling_loss": 0.0,
+        "subarray3_soiling": [0.0] * 12,
+        "subarray3_tracking_loss": 0.0,
+
+        "subarray4_dcwiring_loss": 0.0,
+        "subarray4_diodeconn_loss": 0.0,
+        "subarray4_electrical_mismatch": 0.0,
+        "subarray4_mismatch_loss": 0.0,
+        "subarray4_nameplate_loss": 0.0,
+        "subarray4_rack_shading": 0.0,
+        "subarray4_rear_soiling_loss": 0.0,
+        "subarray4_soiling": [0.0] * 12,
+        "subarray4_tracking_loss": 0.0,
+
+        "transformer_load_loss": 0.0,
+        "transformer_no_load_loss": 0.0,
+        "transmission_loss": 0.0
+        }}
+
+    plant = System()
+    plant.model.assign(ZERO_LOSS)
+
+    print("-" * 50)   
+    # Print the model data
     pprint(plant.model_results)
+    # Export the model data
+    model_data = plant.model.export()
+
+
+
+    # Save the model data to a JSON file
+    output_path = Path("pvsamlab/data/tmp/model_export.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
+    with open(output_path, "w") as json_file:
+        json.dump(model_data, json_file, indent=4)
     print("-" * 50)

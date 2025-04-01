@@ -75,7 +75,7 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
             resource_year=year,
             resource_interval_min=interval,
             resource_dir=download_dir,
-            verbose=True
+            verbose=False
         )
 
         fetcher.fetch([(lon, lat)])
