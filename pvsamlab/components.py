@@ -150,7 +150,8 @@ class Module:
                     "mtAmorph": CellTech.AMORPH
                 }.get(pan_dict.get("Technol"), CellTech.MONO),
 
-                "pmax": pan_dict.get("PNom"),
+                # "pmax": pan_dict.get("PNom"),
+                "pmax": pan_dict.get("Vmp") * pan_dict.get("Imp"),
                 "vmp": pan_dict.get("Vmp"),
                 "imp": pan_dict.get("Imp"),
                 "voc": pan_dict.get("Voc"),

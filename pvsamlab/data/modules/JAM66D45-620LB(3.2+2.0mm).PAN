@@ -5,7 +5,7 @@
   PVObject_Commercial=pvCommercial
     Flags=$0041
     Manufacturer=JA Solar
-    Model=JAM66D45-640/LB(3.2+2.0mm)
+    Model=JAM66D45-620/LB(3.2+2.0mm)
     DataSource=JA internal
     Width=1.134
     Height=2.382
@@ -26,23 +26,23 @@
   FrontSurface=fsARCoating
   GRef=1000
   TRef=25.0
-  PNom=640.0
+  PNom=620.0
   PNomTolLow=0.00
   PNomTolUp=3.00
   BifacialityFactor=0.807
-  Isc=16.240
-  Voc=49.39
-  Imp=15.540
-  Vmp=41.20
+  Isc=16.130
+  Voc=48.50
+  Imp=15.420
+  Vmp=40.21
   muISC=7.01
-  muVocSpec=-128.3
+  muVocSpec=-126.0
   muPmpReq=-0.290
-  RShunt=700
+  RShunt=400
   Rp_0=150000
   Rp_Exp=5.50
-  RSerie=0.152
-  Gamma=1.065
-  muGamma=-0.0004
+  RSerie=0.163
+  Gamma=1.043
+  muGamma=-0.0003
   VMaxIEC=1500
   VMaxUL=1500
   Absorb=0.90
@@ -78,10 +78,10 @@
   End of PVObject pvIAM
 
   OperPoints, list of=5 tOperPoint
-    Point_1=True,1000,25.0,0.00,49.39,16.240,15.540,41.20,640.25
-    Point_2=False,800,25.0,0.52,0.00,0.000,0.000,0.00,510.75
-    Point_3=False,400,25.0,0.45,0.00,0.000,0.000,0.00,255.20
-    Point_4=False,600,25.0,0.86,0.00,0.000,0.000,0.00,384.36
-    Point_5=False,200,25.0,-1.00,0.00,0.000,0.000,0.00,125.76
+    Point_1=True,1000,25.0,0.00,48.50,16.130,15.420,40.21,620.04
+    Point_2=False,800,25.0,0.52,0.00,0.000,0.000,0.00,494.82
+    Point_3=False,400,25.0,0.45,0.00,0.000,0.000,0.00,247.24
+    Point_4=False,600,25.0,0.86,0.00,0.000,0.000,0.00,372.37
+    Point_5=False,200,25.0,-1.00,0.00,0.000,0.000,0.00,121.84
   End of List OperPoints
 End of PVObject pvModule

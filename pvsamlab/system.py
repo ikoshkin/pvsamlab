@@ -25,14 +25,20 @@ import json
 LATITUDE = 30.9759
 LONGITUDE = -97.2465
 
-PAN_DEFAULT = "pvsamlab/data/modules/JAM66D45-640LB(3.2+2.0mm).PAN"
+PAN_DEFAULT = "pvsamlab/data/modules/JAM66D45-620LB(3.2+2.0mm).PAN"
 OND_DEFAULT = "pvsamlab/data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND"
+
+class IrradianceMode:
+     DNI_DHI = 0
+     DNI_GHI = 1
+     GHI_DHI = 2
+     POA_REF = 3
+     POA_PYR = 4
 
 class TrackingMode:
     FT = 0
     SAT = 1
     DAT = 2
-
 
 class Orientation:
     PORTRAIT = 0
@@ -70,8 +76,8 @@ class System:
     # Racking/Orientation
     tracking_mode: int = TrackingMode.SAT
     module_orientation: int = Orientation.PORTRAIT
-    n_modules_x: int = 1
-    n_modules_y: int = field(init=False)
+    n_modules_x: int = field(init=False)
+    n_modules_y: int = 1
     tilt: float = 0
     azimuth: float = 180
     rotation_limit: float = 52
@@ -111,6 +117,12 @@ class System:
         else:
             self.weather_file = download_nsrdb_csv(
                 coords=(self.lat, self.lon), year=met_year)
+            with open(self.weather_file, newline='') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip the first line
+                tmy_header = next(reader)  # Read the second line
+                self.lat = float(tmy_header[5])
+                self.lon = float(tmy_header[6])
 
         self.design_low_temp = get_ashrae_design_low(self.lat, self.lon)
 
@@ -124,7 +136,7 @@ class System:
             self.modules_per_string = calculate_string_size(
                 self.module, self.design_low_temp, self.system_voltage)
 
-        self.n_modules_y = self.modules_per_string
+        self.n_modules_x = self.modules_per_string
 
         # Inverter: If ond_file provided, override default module
         self.inverter = Inverter.from_ond(ond_file)
@@ -158,7 +170,7 @@ def generate_pysam_inputs(plant: System):
         'SolarResource': {
             "albedo": [0.2] * 12,
             "albedo_spatial": [[]],
-            "irrad_mode": 1,
+            "irrad_mode": IrradianceMode.DNI_DHI,
             "sky_model": 2,
             'solar_resource_data':{},
             'solar_resource_file': plant.weather_file,
@@ -168,7 +180,7 @@ def generate_pysam_inputs(plant: System):
 
         'Losses': {
             "acwiring_loss": 0.80,
-            "calculate_bifacial_electrical_mismatch": 0,
+            "calculate_bifacial_electrical_mismatch": 1,
             "calculate_rack_shading": 1,
             "dcoptimizer_loss": 0.0,
             "en_snow_model": 0,
@@ -237,7 +249,7 @@ def generate_pysam_inputs(plant: System):
             'subarray1_slope_tilt': 0.0,
             'subarray1_tilt': plant.tilt,
             'subarray1_tilt_eq_lat': 0,
-            'subarray1_track_mode': TrackingMode.SAT,
+            'subarray1_track_mode': plant.tracking_mode,
             # 'subarray1_use_custom_cell_temp': 0,
             # 'subarray1_use_custom_rot_angles': 0,
             # 'subarray1_custom_cell_temp_array': []
@@ -304,7 +316,7 @@ def generate_pysam_inputs(plant: System):
             },
 
         'Shading': {
-            'subarray1_shade_mode': 1,
+            'subarray1_shade_mode': Shading.STANDARD,
             'subarray1_shading_azal': ((0.0,),),
             'subarray1_shading_diff': 0.0,
             'subarray1_shading_en_azal': 0.0,
@@ -316,7 +328,7 @@ def generate_pysam_inputs(plant: System):
             'subarray1_shading_string_option': 0.0,
             'subarray1_shading_timestep': ((0.0,),),
 
-            'subarray2_shade_mode': 0.0,
+            'subarray2_shade_mode': Shading.NONE,
             'subarray2_shading_azal': ((0.0,),),
             'subarray2_shading_diff': 0.0,
             'subarray2_shading_en_azal': 0.0,
@@ -328,7 +340,7 @@ def generate_pysam_inputs(plant: System):
             'subarray2_shading_string_option': 0.0,
             'subarray2_shading_timestep': ((0.0,),),
 
-            'subarray3_shade_mode': 0.0,
+            'subarray3_shade_mode': Shading.NONE,
             'subarray3_shading_azal': ((0.0,),),
             'subarray3_shading_diff': 0.0,
             'subarray3_shading_en_azal': 0.0,
@@ -340,7 +352,7 @@ def generate_pysam_inputs(plant: System):
             'subarray3_shading_string_option': 0.0,
             'subarray3_shading_timestep': ((0.0,),),
 
-            'subarray4_shade_mode': 0.0,
+            'subarray4_shade_mode': Shading.NONE,
             'subarray4_shading_azal': ((0.0,),),
             'subarray4_shading_diff': 0.0,
             'subarray4_shading_en_azal': 0.0,
@@ -354,7 +366,7 @@ def generate_pysam_inputs(plant: System):
             },
 
         'Layout': {
-            'module_aspect_ratio': round(plant.module.length/plant.module.width, 2),
+            'module_aspect_ratio': plant.module.length/plant.module.width,
 
             'subarray1_mod_orient': plant.module_orientation,
             'subarray1_nmodx': plant.n_modules_x,
@@ -379,7 +391,7 @@ def generate_pysam_inputs(plant: System):
 
         'CECPerformanceModelWithUserEnteredSpecifications': {
             'sixpar_aisc': plant.module.tc_isc * plant.module.isc/100,
-            'sixpar_area': round(plant.module.length * plant.module.width, 2),
+            'sixpar_area': plant.module.length * plant.module.width,
             'sixpar_bifacial_ground_clearance_height': plant.bifacial_ground_clearance,
             'sixpar_bifacial_transmission_factor': plant.module.bifacial_transmission_factor,
             'sixpar_bifaciality': plant.module.bifaciality,
@@ -470,8 +482,19 @@ def process_outputs(plant: System):
     results = {
         'met_year': os.path.basename(plant.model.SolarResource.solar_resource_file),
         'ac_annual': plant.model.Outputs.annual_energy,
-        'voc_max': max(plant.model.Outputs.subarray1_voc),
-        'performance_ratio': plant.model.Outputs.performance_ratio,
+        'voc_max': round(max(plant.model.Outputs.subarray1_voc), 1),
+        'performance_ratio': round(plant.model.Outputs.performance_ratio * 100, 1),
+        'annual_ghi': round(plant.model.Outputs.annual_gh, 3),
+        'annual_poa_front': round(plant.model.Outputs.annual_poa_front, 3),
+        'annual_poa_eff': round(plant.model.Outputs.annual_poa_eff, 3),
+        'Nominal POA Irradiance': round(plant.model.Outputs.annual_poa_nom, 3),
+        'annual_poa_beam_nom': round(plant.model.Outputs.annual_poa_beam_nom, 3),
+        'annual_poa_shading_loss_percent': round(plant.model.Outputs.annual_poa_shading_loss_percent, 3),
+        'annual_poa_soiling_loss_percent': round(plant.model.Outputs.annual_poa_soiling_loss_percent, 3),
+        'annual_poa_iam_loss_percent': round(plant.model.Outputs.annual_poa_cover_loss_percent, 6),
+        'module_count': plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string,
+        'total_module_area':plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string * plant.model.CECPerformanceModelWithUserEnteredSpecifications.sixpar_area,
+        'system_capacity': plant.model.SystemDesign.system_capacity,
     }
     return results
 
@@ -480,7 +503,7 @@ if __name__ == '__main__':
     ZERO_LOSS = {'Losses': {
 
         "acwiring_loss": 0.0,
-        "calculate_bifacial_electrical_mismatch": 0,
+        "calculate_bifacial_electrical_mismatch": 1,
         "calculate_rack_shading": 0,
         "dcoptimizer_loss": 0.0,
         "en_snow_model": 0,
@@ -533,12 +556,29 @@ if __name__ == '__main__':
 
     plant = System()
     plant.model.assign(ZERO_LOSS)
+    plant.model.execute()
+    plant.model_results = process_outputs(plant)
 
     print("-" * 50)   
     # Print the model data
-    pprint(plant.model_results)
+
+    print(json.dumps(plant.model_results))
     # Export the model data
     model_data = plant.model.export()
+    model_export_data = {
+        "SolarResource": model_data["SolarResource"].values,
+        "Losses": model_data["Losses"],
+        "SystemDesign": model_data["SystemDesign"],
+        "Shading": model_data["Shading"],
+        "Layout": model_data["Layout"],
+        "Module": model_data["Module"],
+        "CECPerformanceModelWithUserEnteredSpecifications": model_data["CECPerformanceModelWithUserEnteredSpecifications"],
+        "Inverter": model_data["Inverter"],
+        "InverterDatasheet": model_data["InverterDatasheet"],
+        "PVLosses": model_data["PVLosses"],
+        "AdjustmentFactors": model_data["AdjustmentFactors"],
+        # "GridLimits": model_data["GridLimits"]
+    }
 
 
 
@@ -546,5 +586,9 @@ if __name__ == '__main__':
     output_path = Path("pvsamlab/data/tmp/model_export.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the directory exists
     with open(output_path, "w") as json_file:
-        json.dump(model_data, json_file, indent=4)
+        json.dump(model_export_data, json_file, indent=4)
     print("-" * 50)
+
+
+
+ 
