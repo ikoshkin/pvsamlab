@@ -325,7 +325,7 @@ def generate_pysam_inputs(plant: System):
             'subarray1_shading_en_string_option': 1,
             'subarray1_shading_en_timestep': 0.0,
             'subarray1_shading_mxh': ((0.0,),),
-            'subarray1_shading_string_option': 0.0,
+            'subarray1_shading_string_option': -1,
             'subarray1_shading_timestep': ((0.0,),),
 
             'subarray2_shade_mode': Shading.NONE,
@@ -366,7 +366,7 @@ def generate_pysam_inputs(plant: System):
             },
 
         'Layout': {
-            'module_aspect_ratio': plant.module.length/plant.module.width,
+            'module_aspect_ratio': round(plant.module.length/plant.module.width, 2),
 
             'subarray1_mod_orient': plant.module_orientation,
             'subarray1_nmodx': plant.n_modules_x,
@@ -401,7 +401,7 @@ def generate_pysam_inputs(plant: System):
             'sixpar_imp': plant.module.imp,
             'sixpar_is_bifacial': int(plant.module.is_bifacial),
             'sixpar_isc': plant.module.isc,
-            'sixpar_mounting': 1,
+            'sixpar_mounting': 0,
             'sixpar_nser': plant.module.n_series,
             'sixpar_standoff': 6.0,
             'sixpar_tnoct': plant.module.noct,
@@ -433,8 +433,8 @@ def generate_pysam_inputs(plant: System):
             'inv_ds_paco': plant.inverter.pac_max,
             'inv_ds_pnt': plant.inverter.night_loss,
             'inv_ds_pso': plant.inverter.oper_loss,
-            'inv_ds_vdcmax': plant.inverter.vmp_max,
-            'inv_ds_vdco': plant.inverter.vmp_min,
+            'inv_ds_vdcmax': plant.inverter.abs_max,
+            'inv_ds_vdco': plant.inverter.vdc_nom,
             'inv_tdc_ds': plant.inv_tdc_ds
             },
 
@@ -468,7 +468,7 @@ def generate_pysam_inputs(plant: System):
         # 'ElectricityRates': {},
 
         'GridLimits': {
-            'enable_interconnection_limit': 0.0,
+            'enable_interconnection_limit': 1,
             # 'grid_curtailment': (),
             'grid_interconnection_limit_kwac': 100000.0
             },
@@ -481,20 +481,36 @@ def generate_pysam_inputs(plant: System):
 def process_outputs(plant: System):
     results = {
         'met_year': os.path.basename(plant.model.SolarResource.solar_resource_file),
-        'ac_annual': plant.model.Outputs.annual_energy,
-        'voc_max': round(max(plant.model.Outputs.subarray1_voc), 1),
+        'voc_max': round(max(plant.model.Outputs.subarray1_voc), 2),
         'performance_ratio': round(plant.model.Outputs.performance_ratio * 100, 1),
         'annual_ghi': round(plant.model.Outputs.annual_gh, 3),
         'annual_poa_front': round(plant.model.Outputs.annual_poa_front, 3),
         'annual_poa_eff': round(plant.model.Outputs.annual_poa_eff, 3),
         'Nominal POA Irradiance': round(plant.model.Outputs.annual_poa_nom, 3),
         'annual_poa_beam_nom': round(plant.model.Outputs.annual_poa_beam_nom, 3),
-        'annual_poa_shading_loss_percent': round(plant.model.Outputs.annual_poa_shading_loss_percent, 3),
-        'annual_poa_soiling_loss_percent': round(plant.model.Outputs.annual_poa_soiling_loss_percent, 3),
+        'annual_poa_shading_loss_percent': round(plant.model.Outputs.annual_poa_shading_loss_percent, 5),
+        'annual_poa_soiling_loss_percent': round(plant.model.Outputs.annual_poa_soiling_loss_percent, 5),
         'annual_poa_iam_loss_percent': round(plant.model.Outputs.annual_poa_cover_loss_percent, 6),
-        'module_count': plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string,
-        'total_module_area':plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string * plant.model.CECPerformanceModelWithUserEnteredSpecifications.sixpar_area,
-        'system_capacity': plant.model.SystemDesign.system_capacity,
+        'annual_rear_ground_reflected_percent': round(plant.model.Outputs.annual_rear_ground_reflected_percent, 5),
+        'annual_bifacial_electrical_mismatch_percent': round(plant.model.Outputs.annual_bifacial_electrical_mismatch_percent, 5),
+        'annual_dc_nominal': round(plant.model.Outputs.annual_dc_nominal, 6),
+        'annual_dc_module_loss_percent': round(plant.model.Outputs.annual_dc_module_loss_percent, 5),
+        'annual_dc_gross': round(plant.model.Outputs.annual_dc_gross, 6),
+        "annual_dc_net": round(plant.model.Outputs.annual_dc_net, 3),
+        "annual_ac_inv_clip_loss_percent": round(plant.model.Outputs.annual_ac_inv_clip_loss_percent, 5),
+        "annual_ac_inv_pso_loss_percent": round(plant.model.Outputs.annual_ac_inv_pso_loss_percent, 6),
+        "annual_ac_inv_pnt_loss_percent": round(plant.model.Outputs.annual_ac_inv_pnt_loss_percent, 7),
+        "annual_ac_inv_eff_loss_percent": round(plant.model.Outputs.annual_ac_inv_eff_loss_percent, 5),
+        "annual_inv_cliploss": round(plant.model.Outputs.annual_inv_cliploss, 9),
+        # "annual_ac_interconnect_loss_percent": round(plant.model Outputs.annual_ac_interconnect_loss_percent, 5),
+        "annual_energy": round(plant.model.Outputs.annual_energy, 5),
+
+        # annual_dc_invmppt_loss # TODO to include in string sizing
+        # percent = 100 * (annual_dc_nominal - (annual_dc_gross + annual_snow_loss + annualMpptVoltageClipping)) / annual_dc_nominal;"
+
+        # 'module_count': plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string,
+        # 'total_module_area':plant.model.SystemDesign.subarray1_nstrings * plant.model.SystemDesign.subarray1_modules_per_string * plant.model.CECPerformanceModelWithUserEnteredSpecifications.sixpar_area,
+        # 'system_capacity': plant.model.SystemDesign.system_capacity,
     }
     return results
 
@@ -516,7 +532,7 @@ if __name__ == '__main__':
         "subarray1_nameplate_loss": 0.0,
         "subarray1_rack_shading": 0.0,
         "subarray1_rear_soiling_loss": 0.0,
-        "subarray1_soiling": [0.0] * 12,
+        # "subarray1_soiling": [0.0] * 12,
         "subarray1_tracking_loss": 0.0,
 
         "subarray2_dcwiring_loss": 0.0,
@@ -562,24 +578,23 @@ if __name__ == '__main__':
     print("-" * 50)   
     # Print the model data
 
-    print(json.dumps(plant.model_results))
+    print(json.dumps(plant.model_results, indent=4))
     # Export the model data
     model_data = plant.model.export()
-    model_export_data = {
-        "SolarResource": model_data["SolarResource"].values,
-        "Losses": model_data["Losses"],
-        "SystemDesign": model_data["SystemDesign"],
-        "Shading": model_data["Shading"],
-        "Layout": model_data["Layout"],
-        "Module": model_data["Module"],
-        "CECPerformanceModelWithUserEnteredSpecifications": model_data["CECPerformanceModelWithUserEnteredSpecifications"],
-        "Inverter": model_data["Inverter"],
-        "InverterDatasheet": model_data["InverterDatasheet"],
-        "PVLosses": model_data["PVLosses"],
-        "AdjustmentFactors": model_data["AdjustmentFactors"],
-        # "GridLimits": model_data["GridLimits"]
-    }
-
+    
+    model_export_data = {}
+    model_export_data.update(model_data["SolarResource"])
+    model_export_data.update(model_data["Losses"])
+    model_export_data.update(model_data["SystemDesign"])
+    model_export_data.update(model_data["Shading"])
+    model_export_data.update(model_data["Layout"])
+    model_export_data.update(model_data["Module"])
+    model_export_data.update(model_data["CECPerformanceModelWithUserEnteredSpecifications"])
+    model_export_data.update(model_data["Inverter"])
+    model_export_data.update(model_data["InverterDatasheet"])
+    model_export_data.update(model_data["PVLosses"])
+    model_export_data.update(model_data["AdjustmentFactors"])
+    # model_export_data.update(model_data["GridLimits"])
 
 
     # Save the model data to a JSON file

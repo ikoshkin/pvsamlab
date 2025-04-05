@@ -162,7 +162,7 @@ class Module:
                 "n_series": pan_dict.get("NCelS"),
                 "length": pan_dict.get("PVObject_Commercial", {}).get("Height"),
                 "width": pan_dict.get("PVObject_Commercial", {}).get("Width"),
-                "noct": 45,
+                "noct": 46, # FIXME
                 "is_bifacial": True if pan_dict.get("BifacialityFactor") > 0 else False,
                 "bifacial_transmission_factor": 0.05,
                 "bifaciality": pan_dict.get("BifacialityFactor"),
@@ -186,6 +186,7 @@ class Inverter:
     vmp_min: float = 800
     vmp_max: float = 1250
     abs_max: float = 1500
+    vdc_nom: float = 1100
     inv_num_mppt: int = 1
 
     @classmethod
@@ -229,8 +230,9 @@ class Inverter:
                 "vmp_min": ond_dict.get("Converter", {}).get("VMppMin"),
                 "vmp_max": ond_dict.get("Converter", {}).get("VMPPMax"),
                 "abs_max": ond_dict.get("Converter", {}).get("VAbsMax"),
+                "vdc_nom": ond_dict.get("Converter", {}).get("VmppNom"),
                 "inv_num_mppt": ond_dict.get("NbMPPT", 1),
-                "inv_num_mppt": 1,
+                "inv_num_mppt": 1, #TODO for now hardcoded for Sungrow
 
                 # "tc_pmax": ond_dict.get("muPmpReq"),
                 # "tc_voc": ond_dict.get("muVocSpec") * 100 / ond_dict.get("Voc") / 1000,
