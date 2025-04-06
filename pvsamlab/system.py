@@ -25,8 +25,8 @@ import json
 LATITUDE = 30.9759
 LONGITUDE = -97.2465
 
-PAN_DEFAULT = "pvsamlab/data/modules/JAM66D45-620LB(3.2+2.0mm).PAN"
-OND_DEFAULT = "pvsamlab/data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND"
+PAN_DEFAULT = os.path.join(os.path.dirname(__file__), "data/modules/JAM66D45-620LB(3.2+2.0mm).PAN")
+OND_DEFAULT = os.path.join(os.path.dirname(__file__), "data/inverters/Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND")
 
 class IrradianceMode:
      DNI_DHI = 0

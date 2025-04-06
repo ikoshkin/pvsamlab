@@ -63,8 +63,8 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
     download_dir = os.path.join(_dir, 'data', 'weather_files', location_folder, year_type_folder)
     os.makedirs(download_dir, exist_ok=True)
 
-    log_info(f"📡 Starting NSRDB download: year={year}, location=({lat}, {lon}), type={resource_type}")
-    log_info(f"📁 Target folder: {download_dir}")
+    # log_info(f"📡 Starting NSRDB download: year={year}, location=({lat}, {lon}), type={resource_type}")
+    # log_info(f"📁 Target folder: {download_dir}")
 
     try:
         fetcher = FetchResourceFiles(
@@ -88,7 +88,7 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
             return None
 
         final_path = paths[0]
-        log_info(f"✅ Weather file saved to: {final_path}")
+        # log_info(f"✅ Weather file saved to: {final_path}")
         return final_path
 
     except Exception as e:
