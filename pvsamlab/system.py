@@ -570,7 +570,11 @@ if __name__ == '__main__':
         "transmission_loss": 0.0
         }}
 
-    plant = System()
+    test_pan = r'C:\Users\KV6378\OneDrive - ENGIE\jupyter\pvsamlab\pvsamlab\data\modules\LRI-294 v4.0 LR5-72HBD V4 Pan\LONGi_LR5_72HBD_540M_RETC_294_240920_PV7-4.PAN'
+    plant = System(pan_file = test_pan)
+
+
+
     plant.model.assign(ZERO_LOSS)
     plant.model.execute()
     plant.model_results = process_outputs(plant)

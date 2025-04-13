@@ -7,9 +7,15 @@ from tqdm import tqdm  # pip install tqdm
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-PAN_FILES_FOLDER = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/modules/ja'
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PAN_FILES_FOLDER = os.path.join(BASE_DIR, "pvsamlab", "data", "modules", "LRI-294 v4.0 LR5-72HBD V4 Pan")
 YEAR_RANGE = range(1998, 2024)
-STRING_RANGE = range(27, 33)
+STRING_RANGE = range(25, 29)
+
+american_glory = 37.833712, -117.701832
+kentucky_moc = 37.10778,-85.08639
+
+LAT, LON = kentucky_moc
 NUM_WORKERS = 8  # Matches SAM UI parallelism
 
 # -----------------------------
@@ -22,8 +28,9 @@ def get_pan_files(folder_path):
 def run_simulation(pan_file, year, modules_per_string):
     try:
         plant = System(met_year=str(year),
-                       pan_file=pan_file,
-                       modules_per_string=modules_per_string)
+                        lat=LAT, lon=LON,
+                        pan_file=pan_file,
+                        modules_per_string=modules_per_string)
         voc_max = round(max(plant.model.Outputs.subarray1_voc), 2)
         return {
             "Module": plant.module.model,
