@@ -2,18 +2,19 @@ import os
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pvsamlab.system import System
-from tqdm import tqdm  # pip install tqdm
+from tqdm import tqdm
 
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
-PAN_FILES_FOLDER = '/Users/ihorkoshkin/Library/Mobile Documents/com~apple~CloudDocs/Documents/jupyter/pvsamlab/pvsamlab/data/modules/ja'
-YEAR_RANGE = range(1998, 2024)
-STRING_RANGE = range(27, 33)
-NUM_WORKERS = 8  # Matches SAM UI parallelism
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PAN_FILES_FOLDER = os.path.join(BASE_DIR, "pvsamlab", "data", "modules", "ja")
+YEAR_RANGE = range(1998, 2004)
+STRING_RANGE = range(28, 31)
+NUM_WORKERS = 8
 
 # -----------------------------
-# HELPER FUNCTIONS
+# HELPERS
 # -----------------------------
 
 def get_pan_files(folder_path):
@@ -24,25 +25,67 @@ def run_simulation(pan_file, year, modules_per_string):
         plant = System(met_year=str(year),
                        pan_file=pan_file,
                        modules_per_string=modules_per_string)
-        voc_max = round(max(plant.model.Outputs.subarray1_voc), 2)
-        return {
+
+        # ----- Single-value (annual summary)
+        summary = {
             "Module": plant.module.model,
             "Year": year,
             "ModulesPerString": modules_per_string,
-            "VocMax": voc_max,
-            # "MPPTLosses": plant.model.Outputs.annual_dc_mppt_clip_loss_percent,
+            "VocMax": round(max(plant.model.Outputs.subarray1_voc), 2),
+            "MPPTLoss": round(plant.model.Outputs.annual_dc_invmppt_loss, 2)
         }
+
+        # ----- Monthly outputs from model
+        df_monthly = pd.DataFrame({
+            # "Module": plant.module.model,
+            # "Year": year,
+            # "ModulesPerString": modules_per_string,
+            # "Month": list(range(1, 13)),
+            # "VocMax": plant.model.Outputs.monthly_subarray1_voc,  # ← if available
+            # # Add more monthly outputs if desired
+        })
+
+        # ----- Hourly outputs from model
+        voc = plant.model.Outputs.subarray1_voc
+        poa = plant.model.Outputs.subarray1_poa_nom
+        tamb = plant.model.Outputs.tdry
+        vmp = plant.model.Outputs.subarray1_dc_voltage
+        isc = plant.model.Outputs.subarray1_isc
+
+        dt_index = pd.date_range(start=f'{year}-01-01 00:30', end=f'{year}-12-31 23:30', freq='H')
+        # Remove Feb 29 from the index if it exists
+        dt_index = dt_index[~((dt_index.month == 2) & (dt_index.day == 29))]
+
+        df_hourly = pd.DataFrame({
+            "Year": dt_index.year,
+            "Month": dt_index.month,
+            "Day": dt_index.day,
+            "Hour": dt_index.hour,
+            "Minute": dt_index.minute,
+            "Module": plant.module.model,
+            "YearSimulated": year,
+            "ModulesPerString": modules_per_string,
+            "POA": poa,
+            "Tamb": tamb,
+            "Voc": voc,
+            "Vmp": vmp,
+            "Isc": isc,
+        })
+
+        return summary, df_monthly, df_hourly
+
     except Exception as e:
         return {
             "Error": str(e),
             "Module": os.path.basename(pan_file),
             "Year": year,
             "ModulesPerString": modules_per_string
-        }
+        }, None, None
 
 # -----------------------------
-# MAIN EXECUTION
+# MAIN
 # -----------------------------
+
 def main():
     pan_files = get_pan_files(PAN_FILES_FOLDER)
     tasks = [(pan, year, mps)
@@ -50,22 +93,33 @@ def main():
              for year in YEAR_RANGE
              for mps in STRING_RANGE]
 
-    results = []
+    summary_rows = []
+    monthly_rows = []
+    hourly_rows = []
 
     print(f"Running {len(tasks)} simulations with {NUM_WORKERS} parallel workers...\n")
 
     with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {executor.submit(run_simulation, *t): t for t in tasks}
         for future in tqdm(as_completed(futures), total=len(futures), desc="Simulations"):
-            result = future.result()
-            results.append(result)
-            tqdm.write(f"✓ {result.get('Module')} | Year={result.get('Year')} | Strings={result.get('ModulesPerString')}")
+            summary, monthly, hourly = future.result()
+            if summary:
+                summary_rows.append(summary)
+            if monthly is not None:
+                monthly_rows.append(monthly)
+            if hourly is not None:
+                hourly_rows.append(hourly)
+            tqdm.write(f"✓ {summary.get('Module')} | {summary.get('Year')} | Strings={summary.get('ModulesPerString')}")
 
-    df = pd.DataFrame(results)
-    output_path = "string_sizing_results.csv"
-    df.to_csv(output_path, index=False)
-    print(f"\n✅ Saved results to {output_path}")
-    print(df.head())
+    # Save all outputs
+    pd.DataFrame(summary_rows).to_csv("string_sizing_results_summary.csv", index=False)
+    pd.concat(monthly_rows, ignore_index=True).to_csv("string_sizing_results_monthly.csv", index=False)
+    pd.concat(hourly_rows, ignore_index=True).to_csv("string_sizing_results_hourly.csv", index=False)
+
+    print("\n✅ All results saved:")
+    print(" - string_sizing_results_summary.csv")
+    print(" - string_sizing_results_monthly.csv")
+    print(" - string_sizing_results_hourly.csv")
 
 # -----------------------------
 # REQUIRED FOR MULTIPROCESSING
