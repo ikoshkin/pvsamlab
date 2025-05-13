@@ -74,7 +74,7 @@ class System:
     modules_per_string: InitVar[int] = None
 
     # Racking/Orientation
-    tracking_mode: int = TrackingMode.SAT
+    tracking_mode: InitVar[int] = TrackingMode.SAT
     module_orientation: int = Orientation.PORTRAIT
     n_modules_x: int = field(init=False)
     n_modules_y: int = 1
@@ -104,7 +104,7 @@ class System:
     # Model
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
 
-    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file):
+    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file, tracking_mode):
 
         # Location and meteo
         if os.path.exists(met_year):

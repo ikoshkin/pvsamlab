@@ -8,14 +8,24 @@ from tqdm import tqdm  # pip install tqdm
 # CONFIGURATION
 # -----------------------------
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-PAN_FILES_FOLDER = os.path.join(BASE_DIR, "pvsamlab", "data", "modules", "LRI-294 v4.0 LR5-72HBD V4 Pan")
+
+# PAN_FILES_FOLDER = os.path.join(BASE_DIR, "examples", "string_sizing", "pan_files")
+PAN_FILES_FOLDER = os.path.join(BASE_DIR, "pvsamlab", "data", "modules", "ja29mps") 
 YEAR_RANGE = range(1998, 2024)
-STRING_RANGE = range(25, 29)
+STRING_RANGE = range(28, 30)
 
 american_glory = 37.833712, -117.701832
 kentucky_moc = 37.10778,-85.08639
+steward = 41.807477,-88.986636
+swenson = 33.004,-100.047
 
-LAT, LON = kentucky_moc
+swenson_upper_left = 33.027755,-100.081376
+swenson_lower_right = 32.984455,-100.016812
+swenson_upper_right = 33.028684,-100.017516
+swenson_lower_left = 32.983795,-100.080805
+
+
+LAT, LON = swenson_upper_left
 NUM_WORKERS = 8  # Matches SAM UI parallelism
 
 # -----------------------------

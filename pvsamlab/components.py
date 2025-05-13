@@ -255,3 +255,11 @@ class Inverter:
 
         except Exception as e:
             raise RuntimeError(f"Error parsing OND file: {e}")
+
+if __name__ == "__main__":
+    # Example usage
+    module = Module.from_pan(os.path.join(_dir, "data", "modules", "ja29mps", 'JAM66D45-625LB(3.2+2.0mm).PAN'))
+    print(module)
+
+    inverter = Inverter.from_ond(os.path.join(_dir, "data", "inverters",'Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND'))
+    print(inverter)
