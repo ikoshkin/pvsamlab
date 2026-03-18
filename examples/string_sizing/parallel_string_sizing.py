@@ -41,6 +41,7 @@ def run_simulation(pan_file, year, modules_per_string):
                         lat=LAT, lon=LON,
                         pan_file=pan_file,
                         modules_per_string=modules_per_string)
+        plant.run()
 
         # ----- Summary
         summary = {
