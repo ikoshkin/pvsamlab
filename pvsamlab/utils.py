@@ -5,6 +5,10 @@ from scipy import spatial
 from pvlib.iotools import read_panond
 import PySAM.Wfreader as wf  # Corrected import for weather file reader
 from pkg_resources import resource_filename
+from dotenv import load_dotenv
+
+_dir = os.path.dirname(__file__)
+load_dotenv(os.path.join(_dir, 'secrets.env'))
 
 # Configure logging
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
@@ -143,9 +147,9 @@ def parse_ond_file(ond_file):
         log_error(f"⚠️ Error parsing OND file: {e}")
         return {}
 
-api_key = 'DEMO_KEY'
-your_name = 'Lolo+Pepe'
-email = 'lolo@pepe.com'
+api_key = os.getenv('NSRDB_API_KEY')
+your_name = os.getenv('NSRDB_API_NAME')
+email = os.getenv('NSRDB_API_EMAIL')
 attrs = 'dhi,dni,ghi,air_temperature,surface_pressure,wind_direction,wind_speed'
 
 def download_nsrdb_csv(coords, year='tmy', attributes=attrs):
