@@ -13,3 +13,8 @@ __pycache__/
 pvsamlab/data/tmp/*
 pvsamlab/data/weather_files/*
 secrets.env
+
+# Generated simulation outputs
+examples/**/*_results*.csv
+examples/**/pivot_*.csv
+df.csv
