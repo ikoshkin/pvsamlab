@@ -117,6 +117,11 @@ class System:
         else:
             self.weather_file = download_nsrdb_csv(
                 coords=(self.lat, self.lon), year=met_year)
+            if self.weather_file is None:
+                raise RuntimeError(
+                    f"Weather file download failed for ({self.lat}, {self.lon}), "
+                    f"year='{met_year}'. Check NSRDB API credentials and network access."
+                )
             with open(self.weather_file, newline='') as f:
                 reader = csv.reader(f)
                 next(reader)  # Skip the first line
