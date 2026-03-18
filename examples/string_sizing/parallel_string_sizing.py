@@ -41,8 +41,9 @@ def run_simulation(pan_file, year, modules_per_string):
                         lat=LAT, lon=LON,
                         pan_file=pan_file,
                         modules_per_string=modules_per_string)
-        voc_max = round(max(plant.model.Outputs.subarray1_voc), 2)
-        return {
+
+        # ----- Summary
+        summary = {
             "Module": plant.module.model,
             "Year": year,
             "ModulesPerString": modules_per_string,
@@ -67,7 +68,7 @@ def run_simulation(pan_file, year, modules_per_string):
         vmp = plant.model.Outputs.subarray1_dc_voltage
         isc = plant.model.Outputs.subarray1_isc
 
-        dt_index = pd.date_range(start=f'{year}-01-01 00:30', end=f'{year}-12-31 23:30', freq='H')
+        dt_index = pd.date_range(start=f'{year}-01-01 00:30', end=f'{year}-12-31 23:30', freq='h')
         # Remove Feb 29 from the index if it exists
         dt_index = dt_index[~((dt_index.month == 2) & (dt_index.day == 29))]
 
@@ -120,16 +121,21 @@ def main():
             summary, monthly, hourly = future.result()
             if summary:
                 summary_rows.append(summary)
-            if monthly is not None:
+            if monthly is not None and not monthly.empty:
                 monthly_rows.append(monthly)
             if hourly is not None:
                 hourly_rows.append(hourly)
-            tqdm.write(f"✓ {summary.get('Module')} | {summary.get('Year')} | Strings={summary.get('ModulesPerString')}")
+            if "Error" not in summary:
+                tqdm.write(f"✓ {summary.get('Module')} | {summary.get('Year')} | Strings={summary.get('ModulesPerString')}")
+            else:
+                tqdm.write(f"✗ {summary.get('Module')} | {summary.get('Year')} | {summary.get('Error')}")
 
     # Save all outputs
     pd.DataFrame(summary_rows).to_csv("string_sizing_results_summary.csv", index=False)
-    pd.concat(monthly_rows, ignore_index=True).to_csv("string_sizing_results_monthly.csv", index=False)
-    pd.concat(hourly_rows, ignore_index=True).to_csv("string_sizing_results_hourly.csv", index=False)
+    if monthly_rows:
+        pd.concat(monthly_rows, ignore_index=True).to_csv("string_sizing_results_monthly.csv", index=False)
+    if hourly_rows:
+        pd.concat(hourly_rows, ignore_index=True).to_csv("string_sizing_results_hourly.csv", index=False)
 
     print("\n✅ All results saved:")
     print(" - string_sizing_results_summary.csv")
