@@ -74,7 +74,7 @@ class System:
     modules_per_string: InitVar[int] = None
 
     # Racking/Orientation
-    tracking_mode: InitVar[int] = TrackingMode.SAT
+    tracking_mode: int = TrackingMode.SAT
     module_orientation: int = Orientation.PORTRAIT
     n_modules_x: int = field(init=False)
     n_modules_y: int = 1
@@ -105,7 +105,7 @@ class System:
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
     model_results: dict = field(default=None, init=False)
 
-    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file, tracking_mode):
+    def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file):
 
         # Location and meteo
         if os.path.exists(met_year):
@@ -152,9 +152,6 @@ class System:
         self.n_inverters = floor(target_kwac * 1000 / self.inverter_pac_derated)
         self.kwac = round(self.inverter_pac_derated / 1000 * self.n_inverters, 3)
         self.inv_tdc_ds = [[1100,50,-0.01,55,-0.085,60,-0.085]]
-
-        # Store tracking_mode for use in generate_pysam_inputs
-        self.tracking_mode = tracking_mode
 
         # Array Sizing
         string_kwdc = self.modules_per_string * self.module.pmax / 1000
@@ -283,7 +280,7 @@ def generate_pysam_inputs(plant: System):
             'subarray2_slope_tilt': 0.0,
             'subarray2_tilt': plant.tilt,
             'subarray2_tilt_eq_lat': 0,
-            'subarray2_track_mode': TrackingMode.SAT,
+            'subarray2_track_mode': plant.tracking_mode,
             # 'subarray2_use_custom_cell_temp': 0,
             # 'subarray2_use_custom_rot_angles': 0,
             # 'subarray2_custom_cell_temp_array': [],
@@ -302,7 +299,7 @@ def generate_pysam_inputs(plant: System):
             'subarray3_slope_tilt': 0.0,
             'subarray3_tilt': plant.tilt,
             'subarray3_tilt_eq_lat': 0,
-            'subarray3_track_mode': TrackingMode.SAT,
+            'subarray3_track_mode': plant.tracking_mode,
             # 'subarray3_use_custom_cell_temp': 0,
             # 'subarray3_use_custom_rot_angles': 0,
             # 'subarray3_custom_cell_temp_array': [],
@@ -321,7 +318,7 @@ def generate_pysam_inputs(plant: System):
             'subarray4_slope_tilt': 0.0,
             'subarray4_tilt': plant.tilt,
             'subarray4_tilt_eq_lat': 0,
-            'subarray4_track_mode': TrackingMode.SAT,
+            'subarray4_track_mode': plant.tracking_mode,
             # 'subarray4_use_custom_cell_temp': 0,
             # 'subarray4_use_custom_rot_angles': 0,
             # 'subarray4_custom_cell_temp_array': [],
