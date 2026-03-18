@@ -6,7 +6,6 @@ from typing import List
 import pandas as pd
 from pvlib.iotools import read_panond
 
-from pvsamlab.utils import parse_pan_file
 
 _dir = os.path.dirname(__file__)
 
@@ -73,11 +72,11 @@ class MlModelParameters:
     ground_relfection_fraction: float = 0.2
 
     def __post_init__(self):
-        AM_c_sa = [0] * 5
-        AM_c_lp = [0] * 6
-        c = [0.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0, 100.0]
-        IAM_c_cs_iamValue = [1.0, 0.999, 0.995, 0.987,
-                             0.962, 0.892, 0.816, 0.681, 0.44, 0.0, 0.0]
+        self.AM_c_sa = [0] * 5
+        self.AM_c_lp = [0] * 6
+        self.IAM_c_cs_incAngle = [0.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0, 100.0]
+        self.IAM_c_cs_iamValue = [1.0, 0.999, 0.995, 0.987,
+                                   0.962, 0.892, 0.816, 0.681, 0.44, 0.0, 0.0]
 
 
 @dataclass
@@ -251,7 +250,10 @@ class Inverter:
         except Exception as e:
             raise RuntimeError(f"Error parsing OND file: {e}")
 
-            return cls(**extracted_params)
+if __name__ == "__main__":
+    # Example usage
+    module = Module.from_pan(os.path.join(_dir, "data", "modules", "ja29mps", 'JAM66D45-625LB(3.2+2.0mm).PAN'))
+    print(module)
 
-        except Exception as e:
-            raise RuntimeError(f"Error parsing OND file: {e}")
+    inverter = Inverter.from_ond(os.path.join(_dir, "data", "inverters",'Sungrow_SG4400UD-MV-US_20230817_V14_PVsyst.6.8.6（New Version).OND'))
+    print(inverter)

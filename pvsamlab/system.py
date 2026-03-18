@@ -52,6 +52,70 @@ class Shading:
 
 
 @dataclass
+class Losses:
+    """DC and AC loss parameters for up to four subarrays.
+
+    Defaults match typical utility-scale assumptions. All percentage values
+    are expressed as positive losses (%) except nameplate_loss which can be
+    negative (a gain from positive power tolerance).
+    """
+    # System-level
+    acwiring_loss: float = 0.80
+    calculate_bifacial_electrical_mismatch: int = 1
+    calculate_rack_shading: int = 1
+    dcoptimizer_loss: float = 0.0
+    en_snow_model: int = 0
+    snow_slide_coefficient: float = 1.97
+    transformer_load_loss: float = 0.6
+    transformer_no_load_loss: float = 0.1
+    transmission_loss: float = 0.5
+
+    # Subarray 1 (always active)
+    subarray1_dcwiring_loss: float = 1.5
+    subarray1_diodeconn_loss: float = 0.5
+    subarray1_electrical_mismatch: float = 0.0
+    subarray1_mismatch_loss: float = 1.0
+    subarray1_nameplate_loss: float = -0.4
+    subarray1_rack_shading: float = 0.0
+    subarray1_rear_soiling_loss: float = 0.0
+    subarray1_soiling: List[float] = field(default_factory=lambda: [2.5] * 12)
+    subarray1_tracking_loss: float = 0.5
+
+    # Subarray 2
+    subarray2_dcwiring_loss: float = 1.5
+    subarray2_diodeconn_loss: float = 0.5
+    subarray2_electrical_mismatch: float = 0.0
+    subarray2_mismatch_loss: float = 1.0
+    subarray2_nameplate_loss: float = -0.4
+    subarray2_rack_shading: float = 0.0
+    subarray2_rear_soiling_loss: float = 0.0
+    subarray2_soiling: List[float] = field(default_factory=lambda: [2.5] * 12)
+    subarray2_tracking_loss: float = 0.5
+
+    # Subarray 3
+    subarray3_dcwiring_loss: float = 1.5
+    subarray3_diodeconn_loss: float = 0.5
+    subarray3_electrical_mismatch: float = 0.0
+    subarray3_mismatch_loss: float = 1.0
+    subarray3_nameplate_loss: float = -0.4
+    subarray3_rack_shading: float = 0.0
+    subarray3_rear_soiling_loss: float = 0.0
+    subarray3_soiling: List[float] = field(default_factory=lambda: [2.5] * 12)
+    subarray3_tracking_loss: float = 0.5
+
+    # Subarray 4
+    subarray4_dcwiring_loss: float = 1.5
+    subarray4_diodeconn_loss: float = 0.5
+    subarray4_electrical_mismatch: float = 0.0
+    subarray4_mismatch_loss: float = 1.0
+    subarray4_nameplate_loss: float = -0.4
+    subarray4_rack_shading: float = 0.0
+    subarray4_rear_soiling_loss: float = 0.0
+    subarray4_soiling: List[float] = field(default_factory=lambda: [2.5] * 12)
+    subarray4_tracking_loss: float = 0.5
+
+
+@dataclass
 class System:
     # Target design parameters
     target_kwac: InitVar[float] = 100e3
@@ -101,8 +165,12 @@ class System:
     kwac: float = field(init=False)
     kwdc: float = field(init=False)
 
+    # Losses
+    losses: Losses = field(default_factory=Losses)
+
     # Model
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
+    model_results: dict = field(default=None, init=False)
 
     def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file):
 
@@ -117,6 +185,11 @@ class System:
         else:
             self.weather_file = download_nsrdb_csv(
                 coords=(self.lat, self.lon), year=met_year)
+            if self.weather_file is None:
+                raise RuntimeError(
+                    f"Weather file download failed for ({self.lat}, {self.lon}), "
+                    f"year='{met_year}'. Check NSRDB API credentials and network access."
+                )
             with open(self.weather_file, newline='') as f:
                 reader = csv.reader(f)
                 next(reader)  # Skip the first line
@@ -153,10 +226,16 @@ class System:
         self.kwdc = round(self.n_strings * string_kwdc, 2)
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
-        # Model Execution
+    def run(self) -> dict:
+        """Configure the PySAM model and execute the simulation.
+
+        Must be called explicitly after construction. Stores results in
+        self.model_results and also returns them.
+        """
         self.model.assign(generate_pysam_inputs(self))
         self.model.execute()
         self.model_results = process_outputs(self)
+        return self.model_results
 
 
 def calculate_string_size(module: Module, design_low_temp, system_voltage):
@@ -179,56 +258,56 @@ def generate_pysam_inputs(plant: System):
             },
 
         'Losses': {
-            "acwiring_loss": 0.80,
-            "calculate_bifacial_electrical_mismatch": 1,
-            "calculate_rack_shading": 1,
-            "dcoptimizer_loss": 0.0,
-            "en_snow_model": 0,
-            "snow_slide_coefficient": 1.97,
+            "acwiring_loss": plant.losses.acwiring_loss,
+            "calculate_bifacial_electrical_mismatch": plant.losses.calculate_bifacial_electrical_mismatch,
+            "calculate_rack_shading": plant.losses.calculate_rack_shading,
+            "dcoptimizer_loss": plant.losses.dcoptimizer_loss,
+            "en_snow_model": plant.losses.en_snow_model,
+            "snow_slide_coefficient": plant.losses.snow_slide_coefficient,
 
-            "subarray1_dcwiring_loss": 1.5,
-            "subarray1_diodeconn_loss": 0.5,
-            "subarray1_electrical_mismatch": 0.0,
-            "subarray1_mismatch_loss": 1.0,
-            "subarray1_nameplate_loss": -0.4,
-            "subarray1_rack_shading": 0.0,
-            "subarray1_rear_soiling_loss": 0.0,
-            "subarray1_soiling": [2.5] * 12,
-            "subarray1_tracking_loss": 0.5,
+            "subarray1_dcwiring_loss": plant.losses.subarray1_dcwiring_loss,
+            "subarray1_diodeconn_loss": plant.losses.subarray1_diodeconn_loss,
+            "subarray1_electrical_mismatch": plant.losses.subarray1_electrical_mismatch,
+            "subarray1_mismatch_loss": plant.losses.subarray1_mismatch_loss,
+            "subarray1_nameplate_loss": plant.losses.subarray1_nameplate_loss,
+            "subarray1_rack_shading": plant.losses.subarray1_rack_shading,
+            "subarray1_rear_soiling_loss": plant.losses.subarray1_rear_soiling_loss,
+            "subarray1_soiling": plant.losses.subarray1_soiling,
+            "subarray1_tracking_loss": plant.losses.subarray1_tracking_loss,
 
-            "subarray2_dcwiring_loss": 1.5,
-            "subarray2_diodeconn_loss": 0.5,
-            "subarray2_electrical_mismatch": 0.0,
-            "subarray2_mismatch_loss": 1.0,
-            "subarray2_nameplate_loss": -0.4,
-            "subarray2_rack_shading": 0.0,
-            "subarray2_rear_soiling_loss": 0.0,
-            "subarray2_soiling": [2.5] * 12,
-            "subarray2_tracking_loss": 0.5,
+            "subarray2_dcwiring_loss": plant.losses.subarray2_dcwiring_loss,
+            "subarray2_diodeconn_loss": plant.losses.subarray2_diodeconn_loss,
+            "subarray2_electrical_mismatch": plant.losses.subarray2_electrical_mismatch,
+            "subarray2_mismatch_loss": plant.losses.subarray2_mismatch_loss,
+            "subarray2_nameplate_loss": plant.losses.subarray2_nameplate_loss,
+            "subarray2_rack_shading": plant.losses.subarray2_rack_shading,
+            "subarray2_rear_soiling_loss": plant.losses.subarray2_rear_soiling_loss,
+            "subarray2_soiling": plant.losses.subarray2_soiling,
+            "subarray2_tracking_loss": plant.losses.subarray2_tracking_loss,
 
-            "subarray3_dcwiring_loss": 1.5,
-            "subarray3_diodeconn_loss": 0.5,
-            "subarray3_electrical_mismatch": 0.0,
-            "subarray3_mismatch_loss": 1.0,
-            "subarray3_nameplate_loss": -0.4,
-            "subarray3_rack_shading": 0.0,
-            "subarray3_rear_soiling_loss": 0.0,
-            "subarray3_soiling": [2.5] * 12,
-            "subarray3_tracking_loss": 0.5,
+            "subarray3_dcwiring_loss": plant.losses.subarray3_dcwiring_loss,
+            "subarray3_diodeconn_loss": plant.losses.subarray3_diodeconn_loss,
+            "subarray3_electrical_mismatch": plant.losses.subarray3_electrical_mismatch,
+            "subarray3_mismatch_loss": plant.losses.subarray3_mismatch_loss,
+            "subarray3_nameplate_loss": plant.losses.subarray3_nameplate_loss,
+            "subarray3_rack_shading": plant.losses.subarray3_rack_shading,
+            "subarray3_rear_soiling_loss": plant.losses.subarray3_rear_soiling_loss,
+            "subarray3_soiling": plant.losses.subarray3_soiling,
+            "subarray3_tracking_loss": plant.losses.subarray3_tracking_loss,
 
-            "subarray4_dcwiring_loss": 1.5,
-            "subarray4_diodeconn_loss": 0.5,
-            "subarray4_electrical_mismatch": 0.0,
-            "subarray4_mismatch_loss": 1.0,
-            "subarray4_nameplate_loss": -0.4,
-            "subarray4_rack_shading": 0.0,
-            "subarray4_rear_soiling_loss": 0.0,
-            "subarray4_soiling": [2.5] * 12,
-            "subarray4_tracking_loss": 0.5,
+            "subarray4_dcwiring_loss": plant.losses.subarray4_dcwiring_loss,
+            "subarray4_diodeconn_loss": plant.losses.subarray4_diodeconn_loss,
+            "subarray4_electrical_mismatch": plant.losses.subarray4_electrical_mismatch,
+            "subarray4_mismatch_loss": plant.losses.subarray4_mismatch_loss,
+            "subarray4_nameplate_loss": plant.losses.subarray4_nameplate_loss,
+            "subarray4_rack_shading": plant.losses.subarray4_rack_shading,
+            "subarray4_rear_soiling_loss": plant.losses.subarray4_rear_soiling_loss,
+            "subarray4_soiling": plant.losses.subarray4_soiling,
+            "subarray4_tracking_loss": plant.losses.subarray4_tracking_loss,
 
-            "transformer_load_loss": 0.6,
-            "transformer_no_load_loss": 0.1,
-            "transmission_loss": 0.5
+            "transformer_load_loss": plant.losses.transformer_load_loss,
+            "transformer_no_load_loss": plant.losses.transformer_no_load_loss,
+            "transmission_loss": plant.losses.transmission_loss,
             },
 
         'Lifetime': {},
@@ -268,7 +347,7 @@ def generate_pysam_inputs(plant: System):
             'subarray2_slope_tilt': 0.0,
             'subarray2_tilt': plant.tilt,
             'subarray2_tilt_eq_lat': 0,
-            'subarray2_track_mode': TrackingMode.SAT,
+            'subarray2_track_mode': plant.tracking_mode,
             # 'subarray2_use_custom_cell_temp': 0,
             # 'subarray2_use_custom_rot_angles': 0,
             # 'subarray2_custom_cell_temp_array': [],
@@ -287,7 +366,7 @@ def generate_pysam_inputs(plant: System):
             'subarray3_slope_tilt': 0.0,
             'subarray3_tilt': plant.tilt,
             'subarray3_tilt_eq_lat': 0,
-            'subarray3_track_mode': TrackingMode.SAT,
+            'subarray3_track_mode': plant.tracking_mode,
             # 'subarray3_use_custom_cell_temp': 0,
             # 'subarray3_use_custom_rot_angles': 0,
             # 'subarray3_custom_cell_temp_array': [],
@@ -306,7 +385,7 @@ def generate_pysam_inputs(plant: System):
             'subarray4_slope_tilt': 0.0,
             'subarray4_tilt': plant.tilt,
             'subarray4_tilt_eq_lat': 0,
-            'subarray4_track_mode': TrackingMode.SAT,
+            'subarray4_track_mode': plant.tracking_mode,
             # 'subarray4_use_custom_cell_temp': 0,
             # 'subarray4_use_custom_rot_angles': 0,
             # 'subarray4_custom_cell_temp_array': [],
@@ -572,8 +651,7 @@ if __name__ == '__main__':
 
     test_pan = r'C:\Users\KV6378\OneDrive - ENGIE\jupyter\pvsamlab\pvsamlab\data\modules\LRI-294 v4.0 LR5-72HBD V4 Pan\LONGi_LR5_72HBD_540M_RETC_294_240920_PV7-4.PAN'
     plant = System(pan_file = test_pan)
-
-
+    plant.run()
 
     plant.model.assign(ZERO_LOSS)
     plant.model.execute()
