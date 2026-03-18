@@ -103,6 +103,7 @@ class System:
 
     # Model
     model: pv.default = field(default_factory=lambda: pv.default("FlatPlatePVNone"))
+    model_results: dict = field(default=None, init=False)
 
     def __post_init__(self, target_kwac, target_dcac, met_year, pan_file, modules_per_string, ond_file, tracking_mode):
 
@@ -152,16 +153,25 @@ class System:
         self.kwac = round(self.inverter_pac_derated / 1000 * self.n_inverters, 3)
         self.inv_tdc_ds = [[1100,50,-0.01,55,-0.085,60,-0.085]]
 
+        # Store tracking_mode for use in generate_pysam_inputs
+        self.tracking_mode = tracking_mode
+
         # Array Sizing
         string_kwdc = self.modules_per_string * self.module.pmax / 1000
         self.n_strings = round(self.kwac * target_dcac / string_kwdc)
         self.kwdc = round(self.n_strings * string_kwdc, 2)
         self.dc_ac_ratio = round(self.kwdc / self.kwac, 3)
 
-        # Model Execution
+    def run(self) -> dict:
+        """Configure the PySAM model and execute the simulation.
+
+        Must be called explicitly after construction. Stores results in
+        self.model_results and also returns them.
+        """
         self.model.assign(generate_pysam_inputs(self))
         self.model.execute()
         self.model_results = process_outputs(self)
+        return self.model_results
 
 
 def calculate_string_size(module: Module, design_low_temp, system_voltage):
@@ -577,8 +587,7 @@ if __name__ == '__main__':
 
     test_pan = r'C:\Users\KV6378\OneDrive - ENGIE\jupyter\pvsamlab\pvsamlab\data\modules\LRI-294 v4.0 LR5-72HBD V4 Pan\LONGi_LR5_72HBD_540M_RETC_294_240920_PV7-4.PAN'
     plant = System(pan_file = test_pan)
-
-
+    plant.run()
 
     plant.model.assign(ZERO_LOSS)
     plant.model.execute()
