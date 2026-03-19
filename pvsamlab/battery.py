@@ -144,6 +144,12 @@ class BessDispatch:
 
     strategy: str = "manual"
 
+    # Price-signal dispatch — 8760 hourly prices ($/MWh).
+    # When non-empty and strategy == "price_signal", _generate_battery_inputs()
+    # builds a PriceSignal group with ppa_multiplier_model=1 so PySAM dispatches
+    # against the actual price curve rather than sitting idle.
+    energy_arbitrage_prices: List[float] = field(default_factory=list)
+
     # Manual schedules — 12 months × 24 hours (period index 1–6)
     schedule_weekday: List[List[int]] = field(default_factory=_default_schedule)
     schedule_weekend: List[List[int]] = field(default_factory=_default_schedule)
@@ -375,6 +381,16 @@ class PvBessSystem(System):
         # Provide load profile for self-consumption dispatch
         if disp.strategy == "self_consumption" and self.load_profile:
             inputs["Load"] = {"load": self.load_profile}
+
+        # Provide price signal for price_signal dispatch.
+        # PySAM requires PriceSignal.ppa_multiplier_model=1 (time-series mode) and
+        # PriceSignal.dispatch_factors_ts (8760 $/MWh values used as the price signal).
+        # Without this group the battery has no price signal and sits idle.
+        if disp.strategy == "price_signal" and disp.energy_arbitrage_prices:
+            inputs["PriceSignal"] = {
+                "ppa_multiplier_model": 1,
+                "dispatch_factors_ts": disp.energy_arbitrage_prices,
+            }
 
         # Force single-year output: PVBatterySingleOwner defaults to lifetime
         # mode (system_use_lifetime_output=1, analysis_period=25), which produces

@@ -45,13 +45,6 @@ def run_surplus_case(task: dict) -> dict:
         can_sc      = bool(task["can_solar_charge"])
 
         energy_kwh  = power_kw * duration_hr
-        avg_price   = sum(prices) / len(prices)      # $/MWh
-        avg_p_kwh   = avg_price / 1000.0             # $/kWh
-
-        # ── Normalised price multipliers for PriceSignal ──────────────────────
-        dispatch_factors = [
-            p / avg_price if avg_price > 0 else 1.0 for p in prices
-        ]
 
         # ── Battery hardware ──────────────────────────────────────────────────
         batt = Battery(
@@ -61,8 +54,11 @@ def run_surplus_case(task: dict) -> dict:
         )
 
         # ── Dispatch strategy: price_signal for all modes ─────────────────────
+        # Pass hourly_prices so _generate_battery_inputs() builds the PriceSignal
+        # group (ppa_multiplier_model=1 + dispatch_factors_ts) automatically.
         disp = BessDispatch(
             strategy="price_signal",
+            energy_arbitrage_prices=prices,
             can_gridcharge=[int(can_gc)] * 6,
         )
 
@@ -90,15 +86,9 @@ def run_surplus_case(task: dict) -> dict:
             batt_inputs["BatteryDispatch"]["batt_dispatch_auto_can_curtailcharge"] = 0
 
         plant.model.assign(pv_inputs)
-        plant.model.assign(batt_inputs)
+        plant.model.assign(batt_inputs)  # includes PriceSignal from _generate_battery_inputs()
 
-        # Price signal: dispatch_factors_ts in PriceSignal group
         plant.model.assign({
-            "PriceSignal": {
-                "ppa_multiplier_model": 1,
-                "ppa_price_input":      [avg_p_kwh],
-                "dispatch_factors_ts":  dispatch_factors,
-            },
             "Load": {
                 "load": [float(load_kw)] * 8760,
             },
@@ -123,11 +113,12 @@ def run_surplus_case(task: dict) -> dict:
 
         prices_arr = np.array(prices)
 
-        # ── Revenue computation ───────────────────────────────────────────────
-        # Energy revenue: positive export × price  (MW × $/MWh × 1hr = $)
-        energy_rev_usd = float(
-            np.sum(np.maximum(export_mw, 0) * prices_arr)
-        )
+        # ── Revenue computation (incremental BESS contribution only) ──────────
+        # Subtract PV-only baseline so we credit only the BESS's incremental
+        # export, not the $11-13M/yr of existing PV revenue.
+        pv_base        = np.array(task["pv_baseline_export_mw"])
+        incremental_mw = export_mw - pv_base
+        energy_rev_usd = float(np.sum(incremental_mw * prices_arr))
 
         # Charging cost: grid-charged energy × price (only when can_gridcharge)
         if can_gc:
@@ -155,7 +146,8 @@ def run_surplus_case(task: dict) -> dict:
         r_dec    = fin.discount_rate / 100.0
         n_yr     = fin.analysis_period
         opex_yr  = batt.energy_kwh * batt.opex_per_kwh_year
-        capex    = batt.energy_kwh * batt.capex_per_kwh + batt.power_kw * batt.capex_per_kw
+        epc_mult = task.get("bess_epc_multiplier", 1.35)
+        capex    = (batt.energy_kwh * batt.capex_per_kwh + batt.power_kw * batt.capex_per_kw) * epc_mult
         annual_cf = net_annual_rev - opex_yr
 
         npv_usd = -capex + sum(
@@ -183,7 +175,7 @@ def run_surplus_case(task: dict) -> dict:
             "power_mw":   power_kw / 1000.0,
             "duration_hr": duration_hr,
             "charging_mode": mode,
-            "annual_energy_kwh": pv_r.get("annual_energy_kwh", 0),
+            "annual_energy_kwh": float(np.sum(export_mw)) * 1000,  # MWh×1h×1000 = kWh
             "batt_annual_discharge_energy_kwh": bess_r["batt_annual_discharge_energy_kwh"],
             "batt_annual_charge_energy_kwh":    bess_r["batt_annual_charge_energy_kwh"],
             "batt_roundtrip_efficiency_pct":    bess_r["batt_roundtrip_efficiency_pct"],
