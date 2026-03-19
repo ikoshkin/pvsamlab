@@ -14,12 +14,18 @@ pvsamlab/data/tmp/*
 pvsamlab/data/weather_files/*
 secrets.env
 
-# Generated simulation outputs
+# Generated simulation outputs (CSVs)
 examples/**/*_results*.csv
 examples/**/pivot_*.csv
+examples/**/bess_surplus_filtered_export.csv
 df.csv
 examples/string_sizing/*.csv
 examples/string_sizing/*.pdf
 examples/string_sizing/*.txt
 pvsamlab/data/tmp/
 pvsamlab/data/weather_files/
+
+# Generated chart PNGs (re-created by runner scripts; not source files)
+# Note: DAMPriceExample.csv in pvsamlab/data/ IS committed (source data)
+examples/*.png
+examples/string_sizing/*.png
