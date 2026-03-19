@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python /tmp/gen_nb.py)",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\); import os; print\\(os.getcwd\\(\\)\\)\")",
+      "Bash(sed -i 's|REPO = pathlib.Path\\(\"\"/c/Users/KV6378/OneDrive - ENGIE/jupyter/pvsamlab\"\"\\)|REPO = pathlib.Path\\(\"\".\"\"\\)|' /tmp/gen_nb.py)",
+      "Read(//c/tmp/**)",
+      "Read(//tmp/**)",
+      "Bash(python /tmp/inspect_ond.py)",
+      "Bash(python inspect_ond.py)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0,''/tmp''\\); import gen_nb\")"
+    ],
+    "additionalDirectories": [
+      "\\tmp",
+      "c:\\tmp"
+    ]
+  }
+}
