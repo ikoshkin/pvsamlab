@@ -43,10 +43,16 @@ def run_bess_case(task: dict) -> dict:
             **task["batt_kwargs"],
         )
 
-        # price_signal dispatch with grid charging enabled for arbitrage
+        # self_consumption dispatch with a flat 200 MW load.
+        #
+        # price_signal (choice=4) was tested and produces zero discharge in
+        # PvBessSystem: without a proper ElectricityRates TOU rate matrix AND
+        # an assigned load profile, the battery charges from clip/excess PV but
+        # has no price signal to dispatch against. self_consumption (choice=3)
+        # with a load profile is the correct approach for this PV+BESS study.
         disp = BessDispatch(
-            strategy="price_signal",
-            can_gridcharge=[1, 1, 1, 1, 1, 1],
+            strategy="self_consumption",
+            can_gridcharge=[0, 0, 0, 0, 0, 0],  # PV-only charging
         )
 
         fin = Financial(**task["financial_kwargs"])
@@ -61,7 +67,7 @@ def run_bess_case(task: dict) -> dict:
             tracking_mode=TrackingMode.SAT,
             battery=batt,
             dispatch=disp,
-            load_profile=[0.0] * 8760,   # front-of-meter; no behind-meter load
+            load_profile=task["load_profile"],
         )
 
         sim   = plant.run()
