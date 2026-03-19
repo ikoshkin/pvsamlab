@@ -70,13 +70,16 @@ def find_ond_file(folder_path):
 # Simulation worker
 # ---------------------------------------------------------------------------
 
-def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon):
+def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon, system_kwargs):
     """Run a single PySAM simulation inside a worker process.
 
     Fix 2: all arguments are plain strings/ints/floats — no file handles are
     opened or passed from the parent. All file I/O (PAN, OND, weather) happens
     here, after the pool has forked, so there are no inherited file descriptors
     to go stale.
+
+    system_kwargs is a plain dict of extra keyword arguments forwarded to
+    System() (e.g. soiling, dc_wiring_loss, tracking_mode, …).
 
     Returns
     -------
@@ -91,6 +94,7 @@ def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon):
             pan_file=pan_file,
             ond_file=ond_file,
             modules_per_string=modules_per_string,
+            **system_kwargs,
         )
         plant.run()
 
@@ -154,6 +158,7 @@ def main(
     num_workers=None,
     output_dir=None,
     tqdm_class=None,
+    system_kwargs=None,
 ):
     """Run batch string sizing simulations.
 
@@ -176,21 +181,25 @@ def main(
     tqdm_class : class, optional
         tqdm class for the progress bar. Pass ``tqdm.notebook.tqdm`` when
         calling from Jupyter so the bar renders as a widget.
+    system_kwargs : dict, optional
+        Extra keyword arguments forwarded to System() for each simulation
+        (e.g. soiling, dc_wiring_loss, tracking_mode, tilt, azimuth, …).
 
     Returns
     -------
     dict
         Keys: summary_path, hourly_path, n_total, n_failed, elapsed_s.
     """
-    pan_folders  = pan_folders  if pan_folders  is not None else DEFAULT_PAN_FOLDERS
-    ond_file     = ond_file     if ond_file     is not None else DEFAULT_OND_FILE
-    year_range   = year_range   if year_range   is not None else DEFAULT_YEAR_RANGE
-    string_range = string_range if string_range is not None else DEFAULT_STRING_RANGE
-    lat          = lat          if lat          is not None else DEFAULT_LAT
-    lon          = lon          if lon          is not None else DEFAULT_LON
-    num_workers  = num_workers  if num_workers  is not None else DEFAULT_NUM_WORKERS
-    output_dir   = pathlib.Path(output_dir) if output_dir is not None \
-                   else pathlib.Path(DEFAULT_OUTPUT_DIR)
+    pan_folders   = pan_folders   if pan_folders   is not None else DEFAULT_PAN_FOLDERS
+    ond_file      = ond_file      if ond_file      is not None else DEFAULT_OND_FILE
+    year_range    = year_range    if year_range    is not None else DEFAULT_YEAR_RANGE
+    string_range  = string_range  if string_range  is not None else DEFAULT_STRING_RANGE
+    lat           = lat           if lat           is not None else DEFAULT_LAT
+    lon           = lon           if lon           is not None else DEFAULT_LON
+    num_workers   = num_workers   if num_workers   is not None else DEFAULT_NUM_WORKERS
+    _system_kwargs = system_kwargs if system_kwargs is not None else {}
+    output_dir    = pathlib.Path(output_dir) if output_dir is not None \
+                    else pathlib.Path(DEFAULT_OUTPUT_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Collect PAN files
@@ -201,7 +210,7 @@ def main(
         raise ValueError(f"No .PAN files found in: {pan_folders}")
 
     tasks = [
-        (pan, ond_file, year, mps, lat, lon)
+        (pan, ond_file, year, mps, lat, lon, _system_kwargs)
         for pan in pan_files
         for year in year_range
         for mps in string_range
