@@ -1,0 +1,16 @@
+{
+  "attribution": {
+    "commit": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(cmd /c \"where gh\")",
+      "Bash(ls \"c:\\\\Users\\\\KV6378\\\\OneDrive - ENGIE\\\\jupyter\\\\pvsamlab\\\\pvsamlab\\\\data\\\\modules\\\\ja29mps\"\" 2>/dev/null || ls \"c:UsersKV6378OneDrive - ENGIEjupyterpvsamlabpvsamlabdatamodules\"\")",
+      "Bash(python -c \"import json; nb=json.load\\(open\\(''examples/string_sizing/string_sizing.ipynb'',encoding=''utf-8''\\)\\); print\\([c[''id''] for c in nb[''cells'']]\\)\")",
+      "Bash(jupyter nbconvert:*)"
+    ]
+  }
+}
