@@ -47,15 +47,6 @@ def _sum_output(val: Any) -> float:
         return float(val)
 
 
-def _last_output(val: Any) -> float:
-    """Return last element if iterable, else the value itself."""
-    try:
-        seq = list(val)
-        return float(seq[-1]) if seq else 0.0
-    except (TypeError, IndexError):
-        return float(val)
-
-
 def _mean_output(val: Any) -> float:
     """Return mean if iterable, else the value itself."""
     try:
@@ -210,10 +201,12 @@ def process_bess_outputs(model: Any) -> dict:
         except AttributeError:
             rte = (discharge_kwh / charge_kwh * 100.0) if charge_kwh > 0.0 else 0.0
 
-    # SOH at end of simulation period
+    # SOH per-year array and end-of-life scalar
     try:
-        soh = _last_output(out.batt_capacity_percent)
+        capacity_pct_seq = list(out.batt_capacity_percent)
+        soh = float(capacity_pct_seq[-1]) if capacity_pct_seq else 100.0
     except AttributeError:
+        capacity_pct_seq = []
         soh = 100.0
 
     # Total cycle count
@@ -227,6 +220,7 @@ def process_bess_outputs(model: Any) -> dict:
         "batt_annual_charge_energy_kwh": round(charge_kwh, 3),
         "batt_roundtrip_efficiency_pct": round(rte, 2),
         "batt_capacity_end_of_life_pct": round(soh, 1),
+        "batt_capacity_percent": capacity_pct_seq,   # full per-year SOH array
         "batt_cycles_total": round(cycles, 1),
     }
 
@@ -354,7 +348,7 @@ class PvBessSystem(System):
             "batt_dispatch_discharge_only_load_exceeds_system": 0,
             # Automated dispatch variables (active when batt_dispatch_choice != 0)
             "batt_dispatch_auto_can_charge": 1,
-            "batt_dispatch_auto_can_gridcharge": 0,
+            "batt_dispatch_auto_can_gridcharge": 1 if any(disp.can_gridcharge) else 0,
             "batt_dispatch_auto_can_clipcharge": 1,
             "batt_dispatch_auto_can_curtailcharge": 0,
             "batt_dispatch_auto_can_fuelcellcharge": 0,
@@ -513,7 +507,7 @@ class StandaloneBessSystem:
             "batt_dispatch_discharge_only_load_exceeds_system": 0,
             # Automated-dispatch flags (active when batt_dispatch_choice != 0)
             "batt_dispatch_auto_can_charge": 1,
-            "batt_dispatch_auto_can_gridcharge": 0,
+            "batt_dispatch_auto_can_gridcharge": 1 if any(disp.can_gridcharge) else 0,
             "batt_dispatch_auto_can_clipcharge": 1,
             "batt_dispatch_auto_can_curtailcharge": 0,
             "batt_dispatch_auto_can_fuelcellcharge": 0,
