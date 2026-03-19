@@ -1,65 +1,0 @@
-Running 52 simulations with 8 parallel workers...
-
-Simulations:   0%|          | 0/52 [00:00<?, ?it/s]                                                   ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=1998 | Strings=28
-Simulations:   0%|          | 0/52 [00:04<?, ?it/s]Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=1998 | Strings=29
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=1999 | Strings=28
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=1999 | Strings=29
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2000 | Strings=28
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2000 | Strings=29
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2001 | Strings=28
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2002 | Strings=28
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2001 | Strings=29
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]                                                           ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2002 | Strings=29
-Simulations:   2%|▏         | 1/52 [00:04<03:28,  4.08s/it]Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2003 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2004 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2003 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2004 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2005 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2006 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2005 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2006 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2007 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2008 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2007 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2008 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2009 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2009 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2010 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2010 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2011 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2012 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2011 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2012 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2013 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2013 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2014 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2014 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2015 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2015 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2016 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2016 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2017 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2018 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2017 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2018 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2019 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2019 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2020 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2020 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2021 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2021 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2022 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2023 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2022 | Strings=28
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]                                                            ✓ JAM66D45-625LB(3.2+2.0mm).PAN | Year=2023 | Strings=29
-Simulations:  19%|█▉        | 10/52 [00:04<00:12,  3.27it/s]Simulations: 100%|██████████| 52/52 [00:04<00:00, 22.39it/s]Simulations: 100%|██████████| 52/52 [00:04<00:00, 12.11it/s]
-
-✅ Saved results to string_sizing_results.csv
-                                               Error  ... ModulesPerString
-0  Error parsing OND file: [Errno 9] Bad file des...  ...               28
-1                              OND file not found: 1  ...               29
-2                              OND file not found: 1  ...               28
-3                              OND file not found: 1  ...               29
-4                              OND file not found: 1  ...               28
-
-[5 rows x 4 columns]

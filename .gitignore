@@ -18,3 +18,8 @@ secrets.env
 examples/**/*_results*.csv
 examples/**/pivot_*.csv
 df.csv
+examples/string_sizing/*.csv
+examples/string_sizing/*.pdf
+examples/string_sizing/*.txt
+pvsamlab/data/tmp/
+pvsamlab/data/weather_files/
