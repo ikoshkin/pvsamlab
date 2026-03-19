@@ -17,8 +17,8 @@ Usage
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, List, Tuple
+from dataclasses import dataclass, field
+from typing import Any, List, Optional, Tuple
 
 from scipy.optimize import brentq
 
@@ -70,9 +70,54 @@ class Financial:
     depreciation_schedule: str = "MACRS5"   # "MACRS5" | "straight_line" | "none"
 
 
+@dataclass
+class RevenueStack:
+    """Merchant / stacked revenue sources for batteries.
+
+    Passed as an optional argument to ``compute_lcoe()`` to override or
+    supplement the flat ``ppa_rate`` in ``Financial``.
+
+    Energy arbitrage
+    ----------------
+    When ``energy_arbitrage_prices`` is provided (8760 $/MWh array):
+    - Replaces ``Financial.ppa_rate`` as the ``ppa_price_input`` sent to Singleowner.
+    - ``ppa_escalation`` is forced to 0.0 (prices are already time-varying).
+    - Divide by 1000 internally ($/MWh → $/kWh) before assigning to Singleowner.
+
+    Capacity / ancillary payments
+    -----------------------------
+    Both are added as a post-simulation Python NPV adjustment; they are **not**
+    routed through Singleowner (SAM has no native capacity-market revenue group).
+    Annual bonus = (capacity_payment_per_kw_year + ancillary_services_per_kw_year)
+                   × (capacity_kw or battery.power_kw)
+    """
+
+    # 8760-element hourly price array in $/MWh.
+    # If None, flat Financial.ppa_rate is used (standard PPA case).
+    energy_arbitrage_prices: Optional[List[float]] = None
+
+    # $/kW-year for capacity market participation
+    capacity_payment_per_kw_year: float = 0.0
+
+    # $/kW-year for ancillary services (frequency regulation, spinning reserve, etc.)
+    ancillary_services_per_kw_year: float = 0.0
+
+    # Reference power (kW) for capacity/ancillary payments.
+    # Defaults to battery.power_kw when None (resolved at compute time).
+    capacity_kw: Optional[float] = None
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _npv_of_annuity(annual_payment: float, discount_rate: float, n_years: int) -> float:
+    """Present value of a flat annual payment over n_years at discount_rate (decimal)."""
+    if discount_rate == 0.0:
+        return annual_payment * n_years
+    r = discount_rate / 100.0  # Financial stores discount_rate as %, convert to decimal
+    return annual_payment * (1.0 - (1.0 + r) ** -n_years) / r
+
 
 def _compute_total_installed_cost(system: Any, financial: Financial) -> float:
     """Return total installed cost in USD.
@@ -187,7 +232,11 @@ def _assign_cashloan(
 # Public compute functions
 # ---------------------------------------------------------------------------
 
-def compute_lcoe(system: Any, financial: Financial) -> dict:
+def compute_lcoe(
+    system: Any,
+    financial: Financial,
+    revenue_stack: Optional["RevenueStack"] = None,
+) -> dict:
     """Compute LCOE, NPV, and IRR using PySAM SingleOwner or Cashloan.
 
     ``system.run()`` must have been called before invoking this function.
@@ -202,12 +251,19 @@ def compute_lcoe(system: Any, financial: Financial) -> dict:
         A pvsamlab system instance on which ``.run()`` has already been called.
     financial : Financial
         Financial assumptions.
+    revenue_stack : RevenueStack, optional
+        Merchant / stacked revenue sources.  When provided:
+        - ``energy_arbitrage_prices`` (8760 array) replaces the flat ``ppa_rate``
+          sent to Singleowner/Cashloan.
+        - ``capacity_payment_per_kw_year`` and ``ancillary_services_per_kw_year``
+          are added as a post-simulation Python NPV bonus (not routed through SAM).
 
     Returns
     -------
     dict
         Keys: ``lcoe_real_cents_per_kwh``, ``lcoe_nom_cents_per_kwh``,
-        ``npv_usd``, ``irr_pct``, ``payback_years``, ``total_installed_cost_usd``.
+        ``npv_usd``, ``irr_pct``, ``payback_years`` (Cashloan only),
+        ``total_installed_cost_usd``.
     """
     if system.model_results is None:
         raise RuntimeError(
@@ -218,7 +274,32 @@ def compute_lcoe(system: Any, financial: Financial) -> dict:
     total_installed_cost = _compute_total_installed_cost(system, financial)
     annual_opex = system.kwac * financial.opex_per_kwac_year
 
-    # Q4: Singleowner for kwac > 1000 kW (>1 MWac), Cashloan for <= 1000 kW
+    # Resolve capacity/ancillary NPV bonus from RevenueStack (computed after SAM run)
+    def _annual_revenue_bonus() -> float:
+        if revenue_stack is None:
+            return 0.0
+        cap_kw = revenue_stack.capacity_kw
+        if cap_kw is None:
+            battery = getattr(system, "battery", None)
+            cap_kw = battery.power_kw if battery is not None else 0.0
+        return (
+            revenue_stack.capacity_payment_per_kw_year
+            + revenue_stack.ancillary_services_per_kw_year
+        ) * cap_kw
+
+    def _ppa_price_input_kwh() -> list:
+        """Return ppa_price_input array in $/kWh for SAM."""
+        if revenue_stack is not None and revenue_stack.energy_arbitrage_prices is not None:
+            return [p / 1000.0 for p in revenue_stack.energy_arbitrage_prices]
+        return [financial.ppa_rate / 1000.0]
+
+    def _ppa_escalation() -> float:
+        """Return 0 when hourly prices are provided (already time-varying)."""
+        if revenue_stack is not None and revenue_stack.energy_arbitrage_prices is not None:
+            return 0.0
+        return financial.ppa_escalation
+
+    # Singleowner for kwac > 1000 kW (>1 MWac), Cashloan for <= 1000 kW
     if system.kwac > 1000.0:
         # PySAM 6: module is Singleowner (lowercase 'o'), not SingleOwner
         import PySAM.Singleowner as so_mod
@@ -237,13 +318,23 @@ def compute_lcoe(system: Any, financial: Financial) -> dict:
             "SystemOutput": {"degradation": [financial.degradation_rate]},
         })
         _assign_single_owner(fin_model, financial, total_installed_cost, annual_opex)
+        # Override PPA price with hourly arbitrage prices if provided
+        fin_model.Revenue.ppa_price_input = _ppa_price_input_kwh()
+        fin_model.Revenue.ppa_escalation = _ppa_escalation()
         fin_model.execute()
+
+        # Post-simulation: add capacity/ancillary NPV bonus (not routed through SAM)
+        bonus = _annual_revenue_bonus()
+        npv_sam = fin_model.Outputs.project_return_aftertax_npv
+        npv_total = npv_sam + _npv_of_annuity(bonus, financial.discount_rate, financial.analysis_period)
 
         # Singleowner has no discounted_payback output
         return {
             "lcoe_real_cents_per_kwh": round(fin_model.Outputs.lcoe_real, 4),
             "lcoe_nom_cents_per_kwh": round(fin_model.Outputs.lcoe_nom, 4),
-            "npv_usd": round(fin_model.Outputs.project_return_aftertax_npv, 2),
+            "npv_usd": round(npv_total, 2),
+            "npv_sam_usd": round(npv_sam, 2),
+            "annual_revenue_bonus_usd": round(bonus, 2),
             "irr_pct": round(fin_model.Outputs.project_return_aftertax_irr, 3),
             "total_installed_cost_usd": round(total_installed_cost, 2),
         }
@@ -263,11 +354,17 @@ def compute_lcoe(system: Any, financial: Financial) -> dict:
         _assign_cashloan(fin_model, financial, total_installed_cost, annual_opex)
         fin_model.execute()
 
+        bonus = _annual_revenue_bonus()
+        npv_sam = fin_model.Outputs.npv
+        npv_total = npv_sam + _npv_of_annuity(bonus, financial.discount_rate, financial.analysis_period)
+
         # Cashloan IRR output is named 'irr' (not 'after_tax_irr')
         return {
             "lcoe_real_cents_per_kwh": round(fin_model.Outputs.lcoe_real, 4),
             "lcoe_nom_cents_per_kwh": round(fin_model.Outputs.lcoe_nom, 4),
-            "npv_usd": round(fin_model.Outputs.npv, 2),
+            "npv_usd": round(npv_total, 2),
+            "npv_sam_usd": round(npv_sam, 2),
+            "annual_revenue_bonus_usd": round(bonus, 2),
             "irr_pct": round(fin_model.Outputs.irr, 3),
             "payback_years": round(fin_model.Outputs.discounted_payback, 2),
             "total_installed_cost_usd": round(total_installed_cost, 2),

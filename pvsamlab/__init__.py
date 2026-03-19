@@ -15,6 +15,7 @@ from pvsamlab.battery import (
 # Financial
 from pvsamlab.financial import (
     Financial,
+    RevenueStack,
     compute_lcoe,
     compute_lcos,
     compute_npv,
@@ -39,6 +40,7 @@ __all__ = [
     "process_bess_outputs",
     # Financial
     "Financial",
+    "RevenueStack",
     "compute_lcoe",
     "compute_lcos",
     "compute_npv",
