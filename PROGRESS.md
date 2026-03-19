@@ -48,35 +48,46 @@
 
 ---
 
-## Next Steps
+---
 
-### Immediate
-1. **Open PR** — navigate to:
-   ```
-   https://github.com/ikoshkin/pvsamlab/pull/new/refactor/p0-fixes
-   ```
-   Use title: `refactor: P0 + P1 fixes — correctness, safety, and API decoupling`
+## Phase 3 — BESS Extension (branch: `feature/bess`)
 
-   PR body covers: deleted models.py, parallel_string_sizing bug fix, null-check, MlModelParameters fix, credential removal, System.run() decoupling, tracking_mode propagation, Losses dataclass, pyproject.toml cleanup.
+**Status:** `bess_sandbox.ipynb` runs all 5 cells clean as of commit `2a83202`.
 
-### Feature Work (per AUDIT.md)
+### Implemented
 
-2. **Create `feature/bess` branch** from `main` (or from `refactor/p0-fixes` once merged):
-   ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b feature/bess
-   ```
+| File | Status |
+|------|--------|
+| `pvsamlab/financial.py` | Done — `Financial`, `compute_lcoe`, `compute_lcos`, `compute_npv`, `compute_irr` |
+| `pvsamlab/battery.py` | Done — `Battery`, `BessDispatch`, `PvBessSystem`, `StandaloneBessSystem`, `process_bess_outputs` |
+| `pvsamlab/__init__.py` | Done — all BESS + Financial symbols exported |
+| `examples/bess_sandbox.ipynb` | Done — executes clean, all 5 cells pass |
 
-3. **Implement `pvsamlab/battery.py`** — classes per AUDIT.md Phase 3:
-   - `Battery` dataclass: capacity_kwh, power_kw, roundtrip_efficiency, soc_min/max, chemistry
-   - `BessDispatch` dataclass: dispatch strategy, charge/discharge windows, price thresholds
-   - `BessSystem(System)`: extends System with battery; maps to PySAM `Battwatts` or `BatteryStateful`
-   - `PvBessSystem`: combined PV + BESS simulation using `PySAM.Pvsamv1` + `PySAM.Battery`
+### Key PySAM 6 compatibility fixes applied (all in `2a83202`)
 
-4. **Implement `pvsamlab/financial.py`** — per AUDIT.md Phase 5:
-   - `Financial` dataclass: capex, opex, degradation, discount_rate, offtake_price, incentives
-   - `calculate_lcoe(system, financial) -> float`: uses PySAM `Utilityrate5` + `Cashloan`
-   - `calculate_lcos(bess_system, financial) -> float`: levelized cost of storage
-   - `calculate_npv(cashflows, discount_rate) -> float`
-   - `calculate_irr(cashflows) -> float`
+- `PvBessSystem` uses `pv.default("PVBatterySingleOwner")` as base model (all BatteryCell defaults pre-populated)
+- `BessDispatch._STRATEGY_MAP`: `self_consumption=3` (not 1); `price_signal=4`
+- Added `dispatch_manual_btm_discharge_to_grid`, `batt_dispatch_charge_only/discharge_only`, auto-dispatch vars
+- `Lifetime` group (`analysis_period=1`, `system_use_lifetime_output=0`) required when `en_batt=1`
+- `StandaloneBessSystem` uses `ba.default("StandaloneBatteryResidential")` (provides `timestep_minutes`)
+- Standalone battery forced to `batt_ac_or_dc=1` (PySAM constraint: no-PV system must be AC-coupled)
+- `Singleowner.from_existing(model)` without config arg shares C data pointer (gen available); import defaults separately
+- `federal_tax_rate`, `state_tax_rate`, `ppa_price_input` expect arrays in Singleowner
+- Added MACRS-5 allocation depreciation block to `_assign_single_owner`
+- Added `construction_financing_cost=0`, `cost_other_financing=0` to `FinancialParameters`
+
+### Pending design updates (requested, not yet implemented)
+
+The following BESS_DESIGN.md updates are needed before further implementation:
+
+1. `load_profile` optional, defaults to zeros for utility-scale
+2. Add `RevenueStack` dataclass for merchant/capacity/ancillary revenue streams
+3. Financial architecture split: SAM handles ITC/MACRS/debt; Python handles LCOS/revenue stacking
+4. `Battery.coupling` maps to `batt_ac_or_dc` (0=DC, 1=AC); note capex difference between AC and DC coupling
+
+### Next steps (in order)
+
+1. Update `BESS_DESIGN.md` with above changes
+2. Begin incremental implementation only after design is confirmed
+3. Add `RevenueStack` to financial module
+4. Make `load_profile` optional (default `[0.0]*8760`) in both `PvBessSystem` and `StandaloneBessSystem`
