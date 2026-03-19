@@ -110,6 +110,8 @@ def _assign_single_owner(
     fp.inflation_rate = financial.inflation_rate
     fp.federal_tax_rate = [financial.federal_tax_rate]  # Singleowner expects array
     fp.state_tax_rate = [financial.state_tax_rate]
+    fp.debt_option = 0          # 0=percentage-based; FlatPlatePVSingleOwner default
+                                # is 1 (DSCR-based), which ignores debt_percent.
     fp.debt_percent = financial.debt_fraction   # Singleowner uses debt_percent
     fp.term_int_rate = financial.loan_rate
     fp.term_tenor = financial.loan_term

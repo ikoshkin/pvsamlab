@@ -200,11 +200,15 @@ def process_bess_outputs(model: Any) -> dict:
     discharge_kwh = _sum_output(out.batt_annual_discharge_energy)
     charge_kwh = _sum_output(out.batt_annual_charge_energy)
 
-    # Roundtrip efficiency: use dedicated output, fall back to ratio
+    # Roundtrip efficiency: Pvsamv1 uses batt_roundtrip_efficiency (hourly series);
+    # PySAM.Battery (standalone) uses average_battery_roundtrip_efficiency (scalar).
     try:
         rte = _mean_output(out.batt_roundtrip_efficiency)
     except AttributeError:
-        rte = (discharge_kwh / charge_kwh * 100.0) if charge_kwh > 0.0 else 0.0
+        try:
+            rte = float(out.average_battery_roundtrip_efficiency)
+        except AttributeError:
+            rte = (discharge_kwh / charge_kwh * 100.0) if charge_kwh > 0.0 else 0.0
 
     # SOH at end of simulation period
     try:
@@ -332,6 +336,8 @@ class PvBessSystem(System):
                 "batt_dc_ac_efficiency": batt.dc_ac_efficiency,
                 "batt_ac_dc_efficiency": batt.ac_dc_efficiency,
                 "batt_meter_position": 0,
+                # Disable replacements: requires lifetime output mode (system_use_lifetime_output=1)
+                "batt_replacement_option": 0,
             },
             "BatteryCell": {
                 "batt_chem": Battery.CHEMISTRY_MAP.get(batt.chemistry, 1),
@@ -340,9 +346,26 @@ class PvBessSystem(System):
                 "batt_minimum_SOC": batt.soc_min,
                 "batt_maximum_SOC": batt.soc_max,
             },
-            "BatteryDispatch": {
-                "batt_dispatch_choice": disp.pysam_dispatch_choice(),
-                # Manual schedule variables (used when batt_dispatch_choice=0)
+        }
+
+        pv_bess_dispatch: dict = {
+            "batt_dispatch_choice": disp.pysam_dispatch_choice(),
+            "batt_dispatch_charge_only_system_exceeds_load": 0,
+            "batt_dispatch_discharge_only_load_exceeds_system": 0,
+            # Automated dispatch variables (active when batt_dispatch_choice != 0)
+            "batt_dispatch_auto_can_charge": 1,
+            "batt_dispatch_auto_can_gridcharge": 0,
+            "batt_dispatch_auto_can_clipcharge": 1,
+            "batt_dispatch_auto_can_curtailcharge": 0,
+            "batt_dispatch_auto_can_fuelcellcharge": 0,
+            "batt_dispatch_update_frequency_hours": 1,
+            "batt_look_ahead_hours": 18,
+        }
+        # Guard: only set manual schedule variables for manual dispatch.
+        # In Pvsamv1, providing dispatch_manual_sched when batt_dispatch_choice=3
+        # causes the battery to use manual mode instead of self-consumption.
+        if disp.strategy == "manual":
+            pv_bess_dispatch.update({
                 "dispatch_manual_charge": disp.can_charge,
                 "dispatch_manual_discharge": disp.can_discharge,
                 "dispatch_manual_gridcharge": disp.can_gridcharge,
@@ -352,22 +375,20 @@ class PvBessSystem(System):
                 "dispatch_manual_sched": disp.schedule_weekday,
                 "dispatch_manual_sched_weekend": disp.schedule_weekend,
                 "dispatch_manual_system_charge_first": 0,
-                "batt_dispatch_charge_only_system_exceeds_load": 1,
-                "batt_dispatch_discharge_only_load_exceeds_system": 1,
-                # Automated dispatch variables (used when batt_dispatch_choice=3)
-                "batt_dispatch_auto_can_charge": 1,
-                "batt_dispatch_auto_can_gridcharge": 0,
-                "batt_dispatch_auto_can_clipcharge": 1,
-                "batt_dispatch_auto_can_curtailcharge": 0,
-                "batt_dispatch_auto_can_fuelcellcharge": 0,
-                "batt_dispatch_update_frequency_hours": 1,
-                "batt_look_ahead_hours": 18,
-            },
-        }
+            })
+        inputs["BatteryDispatch"] = pv_bess_dispatch
 
         # Provide load profile for self-consumption dispatch
         if disp.strategy == "self_consumption" and self.load_profile:
             inputs["Load"] = {"load": self.load_profile}
+
+        # Force single-year output: PVBatterySingleOwner defaults to lifetime
+        # mode (system_use_lifetime_output=1, analysis_period=25), which produces
+        # 25-element tuple outputs that would be summed incorrectly by _sum_output.
+        inputs["Lifetime"] = {
+            "analysis_period": 1,
+            "system_use_lifetime_output": 0,
+        }
 
         return inputs
 
@@ -415,11 +436,16 @@ class StandaloneBessSystem:
     model_results: dict = field(default=None, init=False)
 
     def __post_init__(self):
-        # PySAM 6: use Battery module with a standalone default so all required
-        # fields (timestep_minutes, BatteryCell defaults, etc.) are pre-populated.
+        # PySAM 6: use Battery module with the utility-scale standalone default so
+        # all required fields are pre-populated at the right order of magnitude.
+        # StandaloneBatterySingleOwner (~240 MWh / 60 MW) uses power-based current
+        # control (batt_current_choice=1), which is required for MW-scale batteries.
+        # StandaloneBatteryResidential (12 kWh / 5 kW, current_choice=0) causes the
+        # internal power-limit engine to silently clamp to residential scale even
+        # when bank_capacity is overridden.
         import PySAM.Battery as ba
 
-        self.model = ba.default("StandaloneBatteryResidential")
+        self.model = ba.default("StandaloneBatterySingleOwner")
 
     def run(self) -> dict:
         """Download ambient temperature, assign all battery inputs, and execute.
@@ -478,32 +504,29 @@ class StandaloneBessSystem:
         n_series = max(1, round(bank_v / _cell_v))
         n_strings = max(1, round(batt.energy_kwh * 1000.0 / (n_series * _cell_qfull * _cell_v)))
 
-        return {
-            "BatterySystem": {
-                "en_batt": 1,
-                "en_standalone_batt": 1,
-                "batt_computed_bank_capacity": batt.energy_kwh,
-                "batt_computed_series": n_series,
-                "batt_computed_strings": n_strings,
-                "batt_current_choice": 1,
-                "batt_power_charge_max_kwdc": batt.power_kw,
-                "batt_power_discharge_max_kwdc": batt.power_kw,
-                # Standalone battery (no PV) must be AC-coupled regardless of user setting
-                "batt_ac_or_dc": 1,
-                "batt_dc_ac_efficiency": batt.dc_ac_efficiency,
-                "batt_ac_dc_efficiency": batt.ac_dc_efficiency,
-                "batt_meter_position": 0,
-            },
-            "BatteryCell": {
-                "batt_chem": Battery.CHEMISTRY_MAP.get(batt.chemistry, 1),
-                "batt_Vnom_default": _cell_v,
-                "batt_initial_SOC": batt.soc_init,
-                "batt_minimum_SOC": batt.soc_min,
-                "batt_maximum_SOC": batt.soc_max,
-                "batt_room_temperature_celsius": ambient_temp,
-            },
-            "BatteryDispatch": {
-                "batt_dispatch_choice": disp.pysam_dispatch_choice(),
+        dispatch_choice = disp.pysam_dispatch_choice()
+
+        battery_dispatch: dict = {
+            "batt_dispatch_choice": dispatch_choice,
+            # Allow charge/discharge regardless of gen vs load relationship
+            "batt_dispatch_charge_only_system_exceeds_load": 0,
+            "batt_dispatch_discharge_only_load_exceeds_system": 0,
+            # Automated-dispatch flags (active when batt_dispatch_choice != 0)
+            "batt_dispatch_auto_can_charge": 1,
+            "batt_dispatch_auto_can_gridcharge": 0,
+            "batt_dispatch_auto_can_clipcharge": 1,
+            "batt_dispatch_auto_can_curtailcharge": 0,
+            "batt_dispatch_auto_can_fuelcellcharge": 0,
+            "batt_dispatch_update_frequency_hours": 1,
+            "batt_look_ahead_hours": 18,
+        }
+
+        # IMPORTANT: dispatch_manual_sched* must only be set for manual dispatch.
+        # In the standalone Battery module, assigning dispatch_manual_sched overrides
+        # batt_dispatch_choice — the module switches to manual mode even when
+        # batt_dispatch_choice=3 (self_consumption) is also assigned.
+        if disp.strategy == "manual":
+            battery_dispatch.update({
                 "dispatch_manual_charge": disp.can_charge,
                 "dispatch_manual_discharge": disp.can_discharge,
                 "dispatch_manual_gridcharge": disp.can_gridcharge,
@@ -513,21 +536,45 @@ class StandaloneBessSystem:
                 "dispatch_manual_sched": disp.schedule_weekday,
                 "dispatch_manual_sched_weekend": disp.schedule_weekend,
                 "dispatch_manual_system_charge_first": 0,
-                "batt_dispatch_charge_only_system_exceeds_load": 1,
-                "batt_dispatch_discharge_only_load_exceeds_system": 1,
-                "batt_dispatch_auto_can_charge": 1,
-                "batt_dispatch_auto_can_gridcharge": 0,
-                "batt_dispatch_auto_can_clipcharge": 1,
-                "batt_dispatch_auto_can_curtailcharge": 0,
-                "batt_dispatch_auto_can_fuelcellcharge": 0,
-                "batt_dispatch_update_frequency_hours": 1,
-                "batt_look_ahead_hours": 18,
+            })
+
+        return {
+            "BatterySystem": {
+                "en_batt": 1,
+                "en_standalone_batt": 1,
+                "batt_computed_bank_capacity": batt.energy_kwh,
+                "batt_computed_series": n_series,
+                "batt_computed_strings": n_strings,
+                "batt_current_choice": 1,
+                # Provide both DC and AC power limits — standalone batteries are forced
+                # AC-coupled (batt_ac_or_dc=1) and PySAM uses the AC-side limits.
+                "batt_power_charge_max_kwdc": batt.power_kw,
+                "batt_power_discharge_max_kwdc": batt.power_kw,
+                "batt_power_charge_max_kwac": batt.power_kw,
+                "batt_power_discharge_max_kwac": batt.power_kw,
+                # Standalone battery (no PV) must be AC-coupled regardless of user setting
+                "batt_ac_or_dc": 1,
+                "batt_dc_ac_efficiency": batt.dc_ac_efficiency,
+                "batt_ac_dc_efficiency": batt.ac_dc_efficiency,
+                "batt_meter_position": 0,
+                # Disable replacements: replacement modelling requires lifetime output mode
+                "batt_replacement_option": 0,
             },
+            "BatteryCell": {
+                "batt_chem": Battery.CHEMISTRY_MAP.get(batt.chemistry, 1),
+                "batt_Vnom_default": _cell_v,
+                "batt_initial_SOC": batt.soc_init,
+                "batt_minimum_SOC": batt.soc_min,
+                "batt_maximum_SOC": batt.soc_max,
+                "batt_room_temperature_celsius": ambient_temp,
+            },
+            "BatteryDispatch": battery_dispatch,
             "Load": {
                 "load": self.load_profile,
             },
-            # No PV generation — zero array feeds the standalone battery
-            "SystemOutput": {
-                "gen": [0.0] * 8760,
+            # Single-year output mode: avoids 25-element lifetime tuple outputs
+            "Lifetime": {
+                "analysis_period": 1,
+                "system_use_lifetime_output": 0,
             },
         }
