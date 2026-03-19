@@ -98,23 +98,29 @@ def _assign_single_owner(
     total_installed_cost: float,
     annual_opex: float,
 ) -> None:
-    """Populate a SingleOwner model instance from a Financial dataclass."""
+    """Populate a Singleowner model instance from a Financial dataclass.
+
+    Singleowner FinancialParameters uses ``debt_percent`` / ``term_int_rate`` /
+    ``term_tenor``.  Depreciation uses allocation percentages, not depr_fed_type;
+    we leave the defaults from ``FlatPlatePVSingleOwner`` in place.
+    """
     fp = fin_model.FinancialParameters
     fp.analysis_period = financial.analysis_period
     fp.real_discount_rate = financial.discount_rate
     fp.inflation_rate = financial.inflation_rate
-    fp.federal_tax_rate = financial.federal_tax_rate
-    fp.state_tax_rate = financial.state_tax_rate
-    fp.debt_fraction = financial.debt_fraction
+    fp.federal_tax_rate = [financial.federal_tax_rate]  # Singleowner expects array
+    fp.state_tax_rate = [financial.state_tax_rate]
+    fp.debt_percent = financial.debt_fraction   # Singleowner uses debt_percent
     fp.term_int_rate = financial.loan_rate
     fp.term_tenor = financial.loan_term
+    fp.construction_financing_cost = 0.0
+    fp.cost_other_financing = 0.0
 
     sc = fin_model.SystemCosts
     sc.total_installed_cost = total_installed_cost
     sc.om_fixed = [annual_opex]
-
     rev = fin_model.Revenue
-    rev.ppa_price_input = financial.ppa_rate / 1000.0   # $/MWh → $/kWh
+    rev.ppa_price_input = [financial.ppa_rate / 1000.0]   # $/MWh → $/kWh; expects array
     rev.ppa_escalation = financial.ppa_escalation
 
     tci = fin_model.TaxCreditIncentives
@@ -122,9 +128,22 @@ def _assign_single_owner(
     tci.itc_fed_percent_deprbas_fed = 1
     tci.itc_fed_percent_deprbas_sta = 1
 
+    # Singleowner uses allocation-percentage depreciation (not depr_fed_type).
+    # Provide MACRS-5 allocation defaults (90% MACRS-5, rest SL).
     dep = fin_model.Depreciation
-    dep.depr_fed_type = _DEPR_TYPE_MAP.get(financial.depreciation_schedule, 2)
-    dep.depr_sta_type = 0
+    dep.depr_alloc_macrs_5_percent = 90.0
+    dep.depr_alloc_macrs_15_percent = 1.5
+    dep.depr_alloc_sl_5_percent = 0.0
+    dep.depr_alloc_sl_15_percent = 2.5
+    dep.depr_alloc_sl_20_percent = 3.0
+    dep.depr_alloc_sl_39_percent = 0.0
+    dep.depr_alloc_custom_percent = 0.0
+    dep.depr_custom_schedule = [0.0]
+    dep.depr_bonus_fed = 0.0
+    dep.depr_bonus_fed_macrs_5 = 1.0
+    dep.depr_itc_fed_macrs_5 = 1.0
+    dep.depr_fedbas_method = 1.0
+    dep.depr_stabas_method = 1.0
 
 
 def _assign_cashloan(
@@ -133,16 +152,20 @@ def _assign_cashloan(
     total_installed_cost: float,
     annual_opex: float,
 ) -> None:
-    """Populate a Cashloan model instance from a Financial dataclass."""
+    """Populate a Cashloan model instance from a Financial dataclass.
+
+    Cashloan FinancialParameters uses ``debt_fraction`` / ``loan_rate`` /
+    ``loan_term`` (different names from Singleowner).
+    """
     fp = fin_model.FinancialParameters
     fp.analysis_period = financial.analysis_period
     fp.real_discount_rate = financial.discount_rate
     fp.inflation_rate = financial.inflation_rate
     fp.federal_tax_rate = financial.federal_tax_rate
     fp.state_tax_rate = financial.state_tax_rate
-    fp.debt_fraction = financial.debt_fraction
-    fp.term_int_rate = financial.loan_rate
-    fp.term_tenor = financial.loan_term
+    fp.debt_fraction = financial.debt_fraction  # Cashloan uses debt_fraction
+    fp.loan_rate = financial.loan_rate           # Cashloan uses loan_rate
+    fp.loan_term = financial.loan_term           # Cashloan uses loan_term
 
     sc = fin_model.SystemCosts
     sc.total_installed_cost = total_installed_cost
@@ -193,34 +216,57 @@ def compute_lcoe(system: Any, financial: Financial) -> dict:
     total_installed_cost = _compute_total_installed_cost(system, financial)
     annual_opex = system.kwac * financial.opex_per_kwac_year
 
-    # Q4: SingleOwner for kwac > 1000 kW (>1 MWac), Cashloan for <= 1000 kW
+    # Q4: Singleowner for kwac > 1000 kW (>1 MWac), Cashloan for <= 1000 kW
     if system.kwac > 1000.0:
-        import PySAM.SingleOwner as so_mod
+        # PySAM 6: module is Singleowner (lowercase 'o'), not SingleOwner
+        import PySAM.Singleowner as so_mod
 
-        fin_model = so_mod.from_existing(system.model, "FlatPlatePVSingleOwner")
+        # PySAM 6: from_existing without a config name shares the C data pointer,
+        # making gen (and all other PV outputs) accessible to Singleowner.
+        # Import all Singleowner defaults (minus outputs) to satisfy precheck,
+        # then override with user-specified financial settings.
+        fin_model = so_mod.from_existing(system.model)
+        _defaults = so_mod.default("FlatPlatePVSingleOwner").export()
+        _defaults.pop("SystemOutput", None)
+        _defaults.pop("Outputs", None)
+        fin_model.assign(_defaults)
+        fin_model.assign({
+            "Lifetime": {"system_use_lifetime_output": 0},
+            "SystemOutput": {"degradation": [financial.degradation_rate]},
+        })
         _assign_single_owner(fin_model, financial, total_installed_cost, annual_opex)
         fin_model.execute()
 
+        # Singleowner has no discounted_payback output
         return {
             "lcoe_real_cents_per_kwh": round(fin_model.Outputs.lcoe_real, 4),
             "lcoe_nom_cents_per_kwh": round(fin_model.Outputs.lcoe_nom, 4),
             "npv_usd": round(fin_model.Outputs.project_return_aftertax_npv, 2),
             "irr_pct": round(fin_model.Outputs.project_return_aftertax_irr, 3),
-            "payback_years": round(fin_model.Outputs.discounted_payback, 2),
             "total_installed_cost_usd": round(total_installed_cost, 2),
         }
     else:
         import PySAM.Cashloan as cl_mod
 
-        fin_model = cl_mod.from_existing(system.model, "FlatPlatePVCommercial")
+        # Same hybrid pattern as Singleowner: share C data (gen), import defaults
+        fin_model = cl_mod.from_existing(system.model)
+        _defaults = cl_mod.default("FlatPlatePVCommercial").export()
+        _defaults.pop("SystemOutput", None)
+        _defaults.pop("Outputs", None)
+        fin_model.assign(_defaults)
+        fin_model.assign({
+            "Lifetime": {"system_use_lifetime_output": 0},
+            "SystemOutput": {"degradation": [financial.degradation_rate]},
+        })
         _assign_cashloan(fin_model, financial, total_installed_cost, annual_opex)
         fin_model.execute()
 
+        # Cashloan IRR output is named 'irr' (not 'after_tax_irr')
         return {
             "lcoe_real_cents_per_kwh": round(fin_model.Outputs.lcoe_real, 4),
             "lcoe_nom_cents_per_kwh": round(fin_model.Outputs.lcoe_nom, 4),
             "npv_usd": round(fin_model.Outputs.npv, 2),
-            "irr_pct": round(fin_model.Outputs.after_tax_irr, 3),
+            "irr_pct": round(fin_model.Outputs.irr, 3),
             "payback_years": round(fin_model.Outputs.discounted_payback, 2),
             "total_installed_cost_usd": round(total_installed_cost, 2),
         }
