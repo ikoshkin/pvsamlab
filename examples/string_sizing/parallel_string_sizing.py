@@ -40,7 +40,7 @@ DEFAULT_LON = -100.081376
 DEFAULT_YEAR_RANGE = range(1998, 2024)
 DEFAULT_STRING_RANGE = range(28, 30)
 DEFAULT_NUM_WORKERS = 8
-DEFAULT_OUTPUT_DIR = str(_THIS_DIR)
+DEFAULT_OUTPUT_DIR = str(_THIS_DIR / 'outputs')
 
 # ---------------------------------------------------------------------------
 # Helpers

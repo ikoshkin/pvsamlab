@@ -52,7 +52,47 @@
 
 ## Phase 3 — BESS Extension (branch: `feature/bess`)
 
-**Status:** All design updates implemented and committed as of commit `bf4bb04`. Cells 6 and 7 added to sandbox (not yet executed).
+### Current state
+
+- Branch: `feature/bess`
+- Last action: `examples/` folder reorganization into per-tool subfolders with `outputs/`, READMEs, and `CONTRIBUTING.md`
+
+### Completed this session
+
+- BESS Phase 3 full implementation: `battery.py`, `financial.py`, `PvBessSystem`, `StandaloneBessSystem`
+- `bess_sandbox.ipynb` — all 5 cells running clean
+- `pv_bess_sizing_study` — 25-case matrix with heatmaps
+- `pv_bess_dispatch_analysis` — 6 charts + interactive widget
+- `bess_surplus_optimization` — 75-case matrix (25 sizes × 3 charging modes) with merchant price curve and interactive dashboard
+- `examples/` folder reorganized into per-tool structure
+- `CONTRIBUTING.md` and `README.md` for each tool added
+
+### Known issues / pending validation
+
+- `price_signal` dispatch behavior needs validation with real `DAMPriceExample.csv` — confirm battery is actually responding to price signal not flat dispatch
+- Negative net export in winter months (monthly waterfall) needs investigation — likely grid charging issue
+- `batt_dispatch_auto_can_gridcharge=0` fix not yet verified in surplus notebook
+
+### Next session priorities (in order)
+
+1. Validate merchant price curve dispatch behavior
+2. Fix winter negative export / grid charging issue
+3. Add SoH lifetime tracking (`system_use_lifetime_output=1`, `analysis_period=25`, `batt_capacity_percent` per-year array)
+4. Equipment database — `Battery.from_db()` classmethod with CSV of OEM specs (same pattern as `Module.from_pan`)
+5. Merge `feature/bess` to main via PR
+
+### File locations after reorganization
+
+```
+examples/
+  string_sizing/          — string sizing tool
+  bess_sandbox/           — simulation verification
+  bess_sizing_study/      — 25-case parametric study
+  bess_dispatch_analysis/ — operational visualizations
+  bess_surplus/           — brownfield optimization tool
+  sandbox/                — exploration notebooks
+  CONTRIBUTING.md         — folder conventions
+```
 
 ### Implemented
 
@@ -62,8 +102,10 @@
 | `pvsamlab/battery.py` | Done — `Battery`, `BessDispatch`, `PvBessSystem`, `StandaloneBessSystem`, `process_bess_outputs` (with `batt_capacity_percent` array) |
 | `pvsamlab/__init__.py` | Done — all BESS + Financial + RevenueStack symbols exported |
 | `BESS_DESIGN.md` | Done — updated with all 5 pending design items |
-| `examples/bess_sandbox.ipynb` | Done — Cells 1–5 verified; Cells 6–7 added (pending execution) |
-| `examples/bess_sandbox_executed.ipynb` | Cells 1–5 snapshot committed |
+| `examples/bess_sandbox/bess_sandbox.ipynb` | Done — Cells 1–5 verified; Cells 6–7 added |
+| `examples/bess_sizing_study/pv_bess_sizing_study.ipynb` | Done — 25-case matrix |
+| `examples/bess_dispatch_analysis/pv_bess_dispatch_analysis.ipynb` | Done — 6 charts + widget |
+| `examples/bess_surplus/bess_surplus_optimization.ipynb` | Done — 75-case dashboard |
 
 ### Verified simulation results (Cells 1–5, commit `120d4ac`)
 
@@ -78,92 +120,14 @@
 | Cell 5 — Financial | PV-only IRR | 12.82% |
 | Cell 5 — Financial | LCOS | $0.37 /kWh |
 
-### Design updates applied (commits `ffac6dd`, `0863669`, `bf4bb04`)
+### Key PySAM discoveries this session
 
-1. **`load_profile` optional** — defaults to `[0.0]*8760` in both `PvBessSystem` and `StandaloneBessSystem` (documented in BESS_DESIGN.md).
-2. **`RevenueStack` dataclass** — added to `financial.py` and exported from `__init__.py`. Fields: `energy_arbitrage_prices` (8760 $/MWh array), `capacity_payment_per_kw_year`, `ancillary_services_per_kw_year`, `capacity_kw`.
-3. **Financial architecture split confirmed** — SAM Singleowner handles ITC/MACRS/debt/LCOE/IRR; Python handles LCOS and capacity/ancillary NPV bonus via `_npv_of_annuity()`.
-4. **`Battery.coupling` → `batt_ac_or_dc` mapping** — `"DC"→0`, `"AC"→1`; `StandaloneBessSystem` always forces AC (documented in BESS_DESIGN.md).
-5. **`process_bess_outputs` returns `batt_capacity_percent` array** — full per-year SOH list added to output dict.
-
-### Additional battery.py fixes (commit `bf4bb04`)
-
-- `batt_dispatch_auto_can_gridcharge` now derived from `any(disp.can_gridcharge)` instead of hardcoded 0. Default `BessDispatch` has `can_gridcharge=[0]*6`, so existing behavior unchanged. Set `can_gridcharge=[1]*6` for arbitrage dispatch.
-- `_last_output` helper removed (now unused).
-
-### Cell 6 — Merchant price curve (commit `bf4bb04`, pending execution)
-
-- Part A: `StandaloneBessSystem` with `price_signal` dispatch (choice=4) + `can_gridcharge=[1]*6` for grid arbitrage; flat $35/MWh placeholder (swap in real CSV column for actual market prices).
-- Part B: `compute_lcoe(pvbess_plant, fin, revenue_stack=rev)` with `RevenueStack(energy_arbitrage_prices=prices, capacity_payment_per_kw_year=80.0, ancillary_services_per_kw_year=15.0)`.
-- Compares NPV vs Cell 5 flat PPA case.
-
-### Cell 7 — 100 MW / 4-HR sizing loop (commit `bf4bb04`, pending execution)
-
-- Sweeps `energy_kwh` from 400,000 to 550,000 kWh, step 10,000.
-- Projects SOH using linear calendar degradation (2%/yr); finds first year < 100%.
-- Computes LCOS for each size.
-- Reports table `installed_MWh | years_at_nameplate | LCOS` and highlights minimum size for `years_at_nameplate >= 10`.
-
-### Key PySAM 6 compatibility notes
-
-**Battery dispatch:**
-- `PvBessSystem` uses `pv.default("PVBatterySingleOwner")` as base model
-- `BessDispatch._STRATEGY_MAP`: `self_consumption=3`; `price_signal=4`
-- `Lifetime` group (`analysis_period=1`, `system_use_lifetime_output=0`) required when `en_batt=1`
-- `batt_replacement_option=0` required when `system_use_lifetime_output=0`
-- `dispatch_manual_sched*` must NOT be set for non-manual strategies
-
-**Standalone battery:**
-- Must use `ba.default("StandaloneBatterySingleOwner")` — Residential default clamps to residential scale
-- Both `batt_power_charge_max_kwac` and `batt_power_discharge_max_kwac` required for AC-coupled battery
-
-**Financial (Singleowner):**
-- `Singleowner.from_existing(model)` without config arg shares C data pointer (gen available)
-- `federal_tax_rate`, `state_tax_rate`, `ppa_price_input` expect arrays
-- `fp.debt_option=0` required — FlatPlatePVSingleOwner default is DSCR-based (ignores debt_percent)
-
----
-
-## Phase 3 Complete — Summary of all notebooks (branch: `feature/bess`)
-
-### Notebooks delivered
-
-| Notebook | Content | Status |
-|----------|---------|--------|
-| `examples/bess_sandbox.ipynb` | 7-cell sandbox: PV+BESS, standalone BESS, financial, merchant price curve, sizing loop | Complete |
-| `examples/pv_bess_sizing_study.ipynb` | 5×5 BESS sizing matrix (25 cases), parallel sweep, 2×2 heatmaps, ranked table | Complete |
-| `examples/pv_bess_dispatch_analysis.ipynb` | 6 deep-dive charts (weekly dispatch, SOC heatmap, duration curves, monthly waterfall, hourly heatmap, utilization) + 25-case widget | Complete |
-| `examples/bess_surplus_optimization.ipynb` | 75-case (25 sizes × 3 charging modes) brownfield BESS optimization, IRR heatmaps, revenue waterfall, price-dispatch scatter + comprehensive interactive dashboard | Complete |
-
-### Static chart files (generated by runner scripts, not tracked in git)
-
-- `dispatch_weekly.png`, `soc_heatmap.png`, `duration_curves.png`, `monthly_waterfall.png`, `dispatch_hourly_heatmap.png`, `utilization_analysis.png` — from `run_dispatch_analysis.py`
-- `surplus_irr_heatmap.png`, `surplus_revenue_waterfall.png`, `surplus_price_dispatch.png` — from `run_surplus_analysis.py`
-
-### Source data file (tracked in git)
-
-- `pvsamlab/data/DAMPriceExample.csv` — synthetic 2017 ERCOT West Texas DAM price curve (8760 hourly $/MWh values, avg $44/MWh)
-
-### Key PySAM 6 discovery (this phase)
-
-- `price_signal` dispatch (`batt_dispatch_choice=4`) requires `PriceSignal.dispatch_factors_ts` (NOT `Revenue.dispatch_factors_ts` or `ElectricityRates`)
-- `PriceSignal.ppa_multiplier_model=1` must be set to enable the 8760-element time-series
+- `StandaloneBatteryResidential` clamps to 12 kWh / 5 kW — use `StandaloneBatterySingleOwner` for utility scale
+- `dispatch_manual_sched` overrides `batt_dispatch_choice` silently — only assign when `strategy == 'manual'`
+- `from_existing()` without config name shares C pointer
+- `FlatPlatePVSingleOwner` default has `debt_option=1` (DSCR) — set `debt_option=0` for standard financing
+- `batt_ac_or_dc` forced to 1 for `StandaloneBessSystem`
+- `en_batt=1` must be set before `BatterySystem` group assign
+- `price_signal` dispatch requires `PriceSignal.dispatch_factors_ts` (NOT `Revenue` or `ElectricityRates`)
+- `PriceSignal.ppa_multiplier_model=1` must be set to enable 8760-element time-series
 - `GridLimits.enable_interconnection_limit=1` + `GridLimits.grid_interconnection_limit_kwac` for POI enforcement
-- With proper setup, price_signal produces realistic arbitrage: ~155 GWh/yr discharge for 400 MWh/100 MW battery
-
-### Dashboard features (bess_surplus_optimization.ipynb Cell 9)
-
-- Row 1: Case selection (power, duration, charging mode)
-- Row 2: Financial sliders (CAPEX, capacity payment, discount rate) — recalculate NPV/IRR/LCOS without re-simulation
-- Row 3: POI target, week selector, price curve toggle (Merchant / Flat $45 / TOU)
-- 4-panel output: KPI box, dispatch stack, SOC heatmap, price-dispatch scatter
-- Breakeven button: iterate capacity payment 0→150 $/kW-yr, find NPV=0 crossing
-- Pareto frontier button: IRR vs NPV scatter for all 75 cases, Pareto-optimal highlighted
-- Export button: dump filtered results to CSV
-
-### Next steps
-
-1. **SoH lifetime tracking** — extend `process_bess_outputs` to project degradation over full analysis period
-2. **Equipment database integration** — link `Battery` dataclass to real cell/module datasheets from `pvsamlab/data/`
-3. **Real merchant curve validation** — replace `DAMPriceExample.csv` with actual ERCOT HB_WEST 2017 settlement prices
-4. **Price-signal dispatch validation** — confirm `PriceSignal` group behavior matches SAM desktop for edge cases (negative prices, gridcharge interactions)

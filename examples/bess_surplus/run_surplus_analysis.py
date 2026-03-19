@@ -12,7 +12,7 @@ Headless runner for bess_surplus_optimization.ipynb:
 from __future__ import annotations
 import sys, pathlib, warnings
 _HERE = pathlib.Path(__file__).parent
-sys.path.insert(0, str(_HERE.parent))
+sys.path.insert(0, str(_HERE.parent.parent))
 sys.path.insert(0, str(_HERE))
 
 import numpy as np
@@ -66,8 +66,8 @@ FINANCIAL_KWARGS = dict(
     federal_tax_rate=21.0, state_tax_rate=0.0, itc_rate=30.0,
 )
 
-PRICE_CSV   = _HERE.parent / "pvsamlab" / "data" / "DAMPriceExample.csv"
-RESULTS_CSV = _HERE / "bess_surplus_optimization_results.csv"
+PRICE_CSV   = _HERE.parent.parent / "pvsamlab" / "data" / "DAMPriceExample.csv"
+RESULTS_CSV = _HERE / "outputs" / "bess_surplus_optimization_results.csv"
 
 DT_IDX = pd.date_range("2017-01-01", periods=8760, freq="h")
 
@@ -192,7 +192,7 @@ def chart1_irr_heatmap(df: pd.DataFrame) -> None:
 
     fig.colorbar(im, ax=axes[:3].tolist(), shrink=0.55, label="IRR (%)", pad=0.01)
     plt.tight_layout()
-    out = _HERE / "surplus_irr_heatmap.png"
+    out = _HERE / "outputs" / "surplus_irr_heatmap.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved → {out}")
@@ -245,7 +245,7 @@ def chart2_revenue_waterfall(df: pd.DataFrame) -> None:
                  "(black line = net annual revenue)")
     ax.legend(fontsize=8)
     plt.tight_layout()
-    out = _HERE / "surplus_revenue_waterfall.png"
+    out = _HERE / "outputs" / "surplus_revenue_waterfall.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved → {out}")
@@ -277,7 +277,7 @@ def chart3_price_dispatch(df: pd.DataFrame, hourly_data: dict,
         f"Annual discharge: {best['batt_annual_discharge_energy_kwh']/1e6:.1f} TWh"
     )
     plt.tight_layout()
-    out = _HERE / "surplus_price_dispatch.png"
+    out = _HERE / "outputs" / "surplus_price_dispatch.png"
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Saved → {out}")

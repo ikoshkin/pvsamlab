@@ -6,7 +6,7 @@ outputs for pv_bess_dispatch_analysis.ipynb.
 """
 import sys, pathlib, warnings
 _HERE = pathlib.Path(__file__).parent
-sys.path.insert(0, str(_HERE.parent))
+sys.path.insert(0, str(_HERE.parent.parent))
 sys.path.insert(0, str(_HERE))
 
 import numpy as np
@@ -132,7 +132,7 @@ def chart1_weekly(ts_data):
         _plot_dispatch_panel(axes[row, 1], ts, WINTER_SLICE,
                              f'Winter week (Jan 1–7)  |  {lbl}')
     plt.tight_layout()
-    out = _HERE / 'dispatch_weekly.png'
+    out = _HERE / 'outputs' / 'dispatch_weekly.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')
@@ -163,7 +163,7 @@ def chart2_soc(ts_data):
         ax.set_yticklabels(['00:00', '06:00', '12:00', '18:00', '23:00'], fontsize=7)
     fig.colorbar(_im, ax=axes.tolist(), shrink=0.55, label='SOC (%)', pad=0.02)
     plt.tight_layout()
-    out = _HERE / 'soc_heatmap.png'
+    out = _HERE / 'outputs' / 'soc_heatmap.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')
@@ -202,7 +202,7 @@ def chart3_duration(ts_data):
     ax.legend(fontsize=8, loc='upper right')
     ax.set_xlim(0, 8760)
     plt.tight_layout()
-    out = _HERE / 'duration_curves.png'
+    out = _HERE / 'outputs' / 'duration_curves.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')
@@ -253,7 +253,7 @@ def chart4_monthly(ts_data):
     h2, l2 = ax2.get_legend_handles_labels()
     ax1.legend(h1 + h2, l1 + l2, fontsize=8, loc='upper left')
     plt.tight_layout()
-    out = _HERE / 'monthly_waterfall.png'
+    out = _HERE / 'outputs' / 'monthly_waterfall.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')
@@ -283,7 +283,7 @@ def chart5_heatmap(ts_data):
     ax.set_yticks([0, 6, 12, 18, 23])
     ax.set_yticklabels(['00:00', '06:00', '12:00', '18:00', '23:00'])
     plt.tight_layout()
-    out = _HERE / 'dispatch_hourly_heatmap.png'
+    out = _HERE / 'outputs' / 'dispatch_hourly_heatmap.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')
@@ -323,7 +323,7 @@ def chart6_utilization(ts_data):
     ax_r.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 3)], fontsize=8)
     ax_r.legend(fontsize=7)
     plt.tight_layout()
-    out = _HERE / 'utilization_analysis.png'
+    out = _HERE / 'outputs' / 'utilization_analysis.png'
     plt.savefig(out, dpi=150, bbox_inches='tight')
     plt.close()
     print(f'Saved → {out}')

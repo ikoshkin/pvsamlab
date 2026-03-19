@@ -5,7 +5,7 @@ Standalone script to execute the 25-case PV+BESS sizing sweep, save the CSV,
 and regenerate the heatmap and summary table PNGs.
 """
 import sys, time, warnings, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 import numpy as np
@@ -41,9 +41,9 @@ BATT_KWARGS = dict(
 )
 NUM_WORKERS = 8
 _HERE = pathlib.Path(__file__).parent
-RESULTS_CSV = _HERE / 'pv_bess_sizing_study_results.csv'
-HEATMAP_PNG = _HERE / 'pv_bess_sizing_heatmap.png'
-TABLE_PNG   = _HERE / 'pv_bess_sizing_table.png'
+RESULTS_CSV = _HERE / 'outputs' / 'pv_bess_sizing_study_results.csv'
+HEATMAP_PNG = _HERE / 'outputs' / 'pv_bess_sizing_heatmap.png'
+TABLE_PNG   = _HERE / 'outputs' / 'pv_bess_sizing_table.png'
 
 
 def _pivot(df, metric):
