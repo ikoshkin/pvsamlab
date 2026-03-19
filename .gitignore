@@ -9,17 +9,24 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
-*.log
 pvsamlab/data/tmp/*
 pvsamlab/data/weather_files/*
 secrets.env
+examples/secrets.env
 
-# Generated simulation outputs
-examples/**/*_results*.csv
-examples/**/pivot_*.csv
-df.csv
-examples/string_sizing/*.csv
-examples/string_sizing/*.pdf
-examples/string_sizing/*.txt
+# Generated outputs in per-tool outputs/ subfolders
+examples/*/outputs/*.csv
+examples/*/outputs/*.png
+examples/*/outputs/*.log
+examples/*/outputs/*.txt
+examples/*/outputs/*.pdf
+
+# Keep outputs/ folders in git (gitkeep files are tracked)
+!examples/*/outputs/.gitkeep
+
+# Note: DAMPriceExample.csv in pvsamlab/data/ IS committed (source data)
 pvsamlab/data/tmp/
 pvsamlab/data/weather_files/
+
+# Legacy patterns (kept for safety during transition)
+df.csv
