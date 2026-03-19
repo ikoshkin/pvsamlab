@@ -499,8 +499,8 @@ def generate_pysam_inputs(plant: System):
             'inv_ds_eff': plant.inverter.eff_max,
             'inv_ds_paco': plant.inverter.pac_max,
 
-            'mppt_hi_inverter': plant.inverter.vmp_max,
-            'mppt_low_inverter': plant.inverter.vmp_min,
+            'mppt_hi_inverter': plant.inverter.mppt_vmax,
+            'mppt_low_inverter': plant.inverter.mppt_vmin,
             'inv_num_mppt': plant.inverter.inv_num_mppt,
 
             'inverter_count': plant.n_inverters,

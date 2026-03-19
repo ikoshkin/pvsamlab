@@ -182,8 +182,8 @@ class Inverter:
     eff_max: float = 98.5
     night_loss: float = 300
     oper_loss: float = 2000
-    vmp_min: float = 800
-    vmp_max: float = 1250
+    mppt_vmin: float = 800   # MPPT minimum voltage (V) — PVsyst: VMppMin
+    mppt_vmax: float = 1250  # MPPT maximum voltage (V) — PVsyst: VMPPMax
     abs_max: float = 1500
     vdc_nom: float = 1100
     inv_num_mppt: int = 1
@@ -226,8 +226,8 @@ class Inverter:
                 "eff_max": ond_dict.get("Converter", {}).get("EfficMax"),
                 "night_loss": ond_dict.get("Night_Loss", 0),
                 "oper_loss": ond_dict.get("Converter", {}).get("PSeuil"),
-                "vmp_min": ond_dict.get("Converter", {}).get("VMppMin"),
-                "vmp_max": ond_dict.get("Converter", {}).get("VMPPMax"),
+                "mppt_vmin": ond_dict.get("Converter", {}).get("VMppMin"),
+                "mppt_vmax": ond_dict.get("Converter", {}).get("VMPPMax"),
                 "abs_max": ond_dict.get("Converter", {}).get("VAbsMax"),
                 "vdc_nom": ond_dict.get("Converter", {}).get("VmppNom"),
                 "inv_num_mppt": ond_dict.get("NbMPPT", 1),
