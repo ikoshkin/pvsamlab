@@ -52,7 +52,7 @@
 
 ## Phase 3 — BESS Extension (branch: `feature/bess`)
 
-**Status:** `bess_sandbox.ipynb` runs all 5 cells clean as of commit `2a83202`.
+**Status:** All 5 sandbox cells produce physically plausible results as of commit `120d4ac`.
 
 ### Implemented
 
@@ -61,24 +61,46 @@
 | `pvsamlab/financial.py` | Done — `Financial`, `compute_lcoe`, `compute_lcos`, `compute_npv`, `compute_irr` |
 | `pvsamlab/battery.py` | Done — `Battery`, `BessDispatch`, `PvBessSystem`, `StandaloneBessSystem`, `process_bess_outputs` |
 | `pvsamlab/__init__.py` | Done — all BESS + Financial symbols exported |
-| `examples/bess_sandbox.ipynb` | Done — executes clean, all 5 cells pass |
+| `examples/bess_sandbox.ipynb` | Done — all 5 cells clean, all metrics physically plausible |
+| `examples/bess_sandbox_executed.ipynb` | Done — committed executed snapshot |
 
-### Key PySAM 6 compatibility fixes applied (all in `2a83202`)
+### Verified simulation results
 
-- `PvBessSystem` uses `pv.default("PVBatterySingleOwner")` as base model (all BatteryCell defaults pre-populated)
-- `BessDispatch._STRATEGY_MAP`: `self_consumption=3` (not 1); `price_signal=4`
-- Added `dispatch_manual_btm_discharge_to_grid`, `batt_dispatch_charge_only/discharge_only`, auto-dispatch vars
+| Cell | Metric | Value |
+|------|--------|-------|
+| Cell 3 — PV+BESS | Annual discharge | 43.9 M kWh |
+| Cell 3 — PV+BESS | Annual charge | 45.3 M kWh |
+| Cell 3 — PV+BESS | Roundtrip efficiency | 97% |
+| Cell 4 — Standalone BESS | Annual discharge | 87.5 M kWh |
+| Cell 4 — Standalone BESS | Annual charge | 95.7 M kWh |
+| Cell 4 — Standalone BESS | Roundtrip efficiency | 91.5% |
+| Cell 5 — Financial | PV-only IRR | 12.82% |
+| Cell 5 — Financial | LCOS | $0.37 /kWh |
+
+### Key PySAM 6 compatibility fixes (commits `e6cf79e`, `120d4ac`)
+
+**Battery dispatch:**
+- `PvBessSystem` uses `pv.default("PVBatterySingleOwner")` as base model
+- `BessDispatch._STRATEGY_MAP`: `self_consumption=3`; `price_signal=4`
 - `Lifetime` group (`analysis_period=1`, `system_use_lifetime_output=0`) required when `en_batt=1`
-- `StandaloneBessSystem` uses `ba.default("StandaloneBatteryResidential")` (provides `timestep_minutes`)
-- Standalone battery forced to `batt_ac_or_dc=1` (PySAM constraint: no-PV system must be AC-coupled)
-- `Singleowner.from_existing(model)` without config arg shares C data pointer (gen available); import defaults separately
+- `batt_replacement_option=0` required when `system_use_lifetime_output=0`
+- `dispatch_manual_sched*` must NOT be set for non-manual strategies — in the Battery module,
+  assigning `dispatch_manual_sched` overrides `batt_dispatch_choice` regardless of its value
+- Manual dispatch (`batt_dispatch_choice=0`) is non-functional in `PySAM.Battery` standalone mode;
+  use `self_consumption` (choice=3) for `StandaloneBessSystem`
+
+**Standalone battery:**
+- `StandaloneBessSystem` must use `ba.default("StandaloneBatterySingleOwner")` — the `Residential`
+  default (12 kWh / 5 kW) clamps power to residential scale even when `bank_capacity` is overridden
+- Both `batt_power_charge_max_kwac` and `batt_power_discharge_max_kwac` required for AC-coupled battery
+
+**Financial:**
+- `Singleowner.from_existing(model)` without config arg shares C data pointer (gen available)
 - `federal_tax_rate`, `state_tax_rate`, `ppa_price_input` expect arrays in Singleowner
-- Added MACRS-5 allocation depreciation block to `_assign_single_owner`
-- Added `construction_financing_cost=0`, `cost_other_financing=0` to `FinancialParameters`
+- `fp.debt_option=0` required — `FlatPlatePVSingleOwner` default is `debt_option=1` (DSCR-based),
+  which ignores `debt_percent` entirely regardless of what value is assigned
 
 ### Pending design updates (requested, not yet implemented)
-
-The following BESS_DESIGN.md updates are needed before further implementation:
 
 1. `load_profile` optional, defaults to zeros for utility-scale
 2. Add `RevenueStack` dataclass for merchant/capacity/ancillary revenue streams
@@ -87,7 +109,7 @@ The following BESS_DESIGN.md updates are needed before further implementation:
 
 ### Next steps (in order)
 
-1. Update `BESS_DESIGN.md` with above changes
+1. Update `BESS_DESIGN.md` with above design items
 2. Begin incremental implementation only after design is confirmed
 3. Add `RevenueStack` to financial module
 4. Make `load_profile` optional (default `[0.0]*8760`) in both `PvBessSystem` and `StandaloneBessSystem`
