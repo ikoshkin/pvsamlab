@@ -26,7 +26,7 @@ from pvsamlab.financial import (
 from pvsamlab.components import Module, Inverter
 
 # Climate / NSRDB utilities
-from pvsamlab.climate import check_nsrdb_connectivity
+from pvsamlab.climate import check_nsrdb_connectivity, validate_weather_file
 
 __all__ = [
     # PV-only
@@ -53,4 +53,5 @@ __all__ = [
     "Inverter",
     # Climate
     "check_nsrdb_connectivity",
+    "validate_weather_file",
 ]

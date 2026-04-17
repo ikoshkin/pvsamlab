@@ -65,10 +65,7 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
     download_dir = os.path.join(_dir, 'data', 'weather_files', location_folder, year_type_folder)
     os.makedirs(download_dir, exist_ok=True)
 
-    # log_info(f"📡 Starting NSRDB download: year={year}, location=({lat}, {lon}), type={resource_type}")
-    # log_info(f"📁 Target folder: {download_dir}")
-
-    try:
+    def _run_fetcher():
         fetcher = FetchResourceFiles(
             tech='solar',
             nrel_api_key=api_key,
@@ -79,7 +76,6 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
             resource_dir=download_dir,
             verbose=False
         )
-
         # PySAM's FetchResourceFiles has developer.nrel.gov hardcoded internally.
         # That domain 301-redirects to developer.nlr.gov during the brownout period
         # (deadline April 30 2026). Wrap with a timeout so hung downloads fail fast.
@@ -92,8 +88,10 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
                     "NSRDB download timed out. Check that developer.nlr.gov "
                     "is reachable and API credentials are valid."
                 )
-        paths = fetcher.resource_file_paths
+        return fetcher.resource_file_paths
 
+    try:
+        paths = _run_fetcher()
         cleanup_query_json(download_dir, lat, lon)
 
         if not paths:
@@ -101,7 +99,38 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
             return None
 
         final_path = paths[0]
-        # log_info(f"✅ Weather file saved to: {final_path}")
+
+        result = validate_weather_file(final_path)
+
+        if result['interval'] == 30:
+            resample_to_hourly(final_path)
+            result = validate_weather_file(final_path)
+
+        if not result['valid'] and result['issue'] and 'nan' in result['issue'].lower():
+            log_error(f"⚠️ Weather file has NaN issues ({result['issue']}), retrying download...")
+            try:
+                os.remove(final_path)
+            except OSError:
+                pass
+            try:
+                paths2 = _run_fetcher()
+                cleanup_query_json(download_dir, lat, lon)
+                if not paths2:
+                    log_error("⚠️ Retry returned no resource files.")
+                    return None
+                final_path = paths2[0]
+                result2 = validate_weather_file(final_path)
+                if not result2['valid']:
+                    log_error(
+                        f"⚠️ Re-downloaded file also failed validation "
+                        f"({result2['issue']}). Returning path anyway."
+                    )
+            except Exception as retry_exc:
+                log_error(f"⚠️ Retry download failed: {retry_exc}")
+                return None
+        elif not result['valid']:
+            log_error(f"⚠️ Weather file validation failed: {result['issue']}")
+
         return final_path
 
     except Exception as e:
@@ -121,6 +150,127 @@ def cleanup_query_json(folder, lat, lon):
             os.remove(f)
         except Exception:
             pass  # Silent cleanup, logging not needed per user instruction
+
+
+def validate_weather_file(filepath):
+    """
+    Validate an NSRDB CSV weather file.
+
+    Reads the 2-row metadata header and the data block to check:
+    - Interval and lat/lon present in header
+    - GHI, DNI, DHI columns exist
+    - NaN fraction in GHI/DNI/DHI < 5%
+    - Row count matches the interval (8760 for 60-min, 17520 for 30-min)
+
+    Returns:
+        dict with keys: valid (bool), interval (int or None),
+        nan_fraction (float or None), row_count (int or None),
+        issue (str or None).
+    """
+    try:
+        header_keys = pd.read_csv(filepath, nrows=1, header=None).iloc[0]
+        header_vals = pd.read_csv(filepath, skiprows=1, nrows=1, header=None).iloc[0]
+        meta = dict(zip(header_keys, header_vals))
+
+        interval_str = str(meta.get('Interval', '')).strip()
+        lat_str = str(meta.get('Latitude', '')).strip()
+        lon_str = str(meta.get('Longitude', '')).strip()
+
+        if not interval_str or interval_str == 'nan':
+            return {'valid': False, 'interval': None, 'nan_fraction': None,
+                    'row_count': None, 'issue': 'Interval missing from header'}
+
+        interval = int(float(interval_str))
+
+        if not lat_str or not lon_str or lat_str == 'nan' or lon_str == 'nan':
+            return {'valid': False, 'interval': interval, 'nan_fraction': None,
+                    'row_count': None, 'issue': 'lat/lon missing from header'}
+
+        df = pd.read_csv(filepath, skiprows=2)
+
+        irr_cols = ['GHI', 'DNI', 'DHI']
+        missing = [c for c in irr_cols if c not in df.columns]
+        if missing:
+            return {'valid': False, 'interval': interval, 'nan_fraction': None,
+                    'row_count': len(df), 'issue': f'Missing columns: {missing}'}
+
+        nan_fraction = float(df[irr_cols].isna().values.mean())
+        row_count = len(df)
+        expected = 8760 if interval == 60 else 17520
+
+        if nan_fraction >= 0.05:
+            return {'valid': False, 'interval': interval, 'nan_fraction': nan_fraction,
+                    'row_count': row_count,
+                    'issue': f'High nan fraction in irradiance: {nan_fraction:.1%}'}
+
+        if row_count != expected:
+            return {'valid': False, 'interval': interval, 'nan_fraction': nan_fraction,
+                    'row_count': row_count,
+                    'issue': f'Expected {expected} rows for {interval}-min interval, got {row_count}'}
+
+        return {'valid': True, 'interval': interval, 'nan_fraction': nan_fraction,
+                'row_count': row_count, 'issue': None}
+
+    except Exception as e:
+        return {'valid': False, 'interval': None, 'nan_fraction': None,
+                'row_count': None, 'issue': f'Read error: {e}'}
+
+
+def resample_to_hourly(filepath):
+    """
+    Resample a 30-minute NSRDB CSV to 60-minute in place.
+
+    Pairs of consecutive rows are collapsed to one hourly row:
+    - Irradiance (GHI, DNI, DHI), Temperature, Pressure, Wind Speed: mean
+    - Wind Direction and time columns: first value of each pair
+    Updates 'Interval' in the metadata header from 30 to 60.
+    """
+    import pathlib
+
+    # Preserve the raw header lines so the file structure stays intact
+    with open(filepath, 'r') as fh:
+        lines = fh.readlines()
+
+    header_line0 = lines[0]   # metadata keys
+    header_line1 = lines[1]   # metadata values
+    col_line = lines[2]       # column names
+
+    # Update Interval value in metadata
+    keys = [k.strip() for k in header_line0.split(',')]
+    vals = [v.strip() for v in header_line1.split(',')]
+    try:
+        idx = keys.index('Interval')
+        vals[idx] = '60'
+        header_line1 = ','.join(vals) + '\n'
+    except ValueError:
+        pass
+
+    df = pd.read_csv(filepath, skiprows=2)
+
+    irr_cols  = [c for c in ['GHI', 'DNI', 'DHI'] if c in df.columns]
+    mean_cols = [c for c in ['Temperature', 'Pressure', 'Wind Speed'] if c in df.columns]
+    first_cols = [c for c in ['Wind Direction'] if c in df.columns]
+    time_cols = [c for c in ['Year', 'Month', 'Day', 'Hour', 'Minute'] if c in df.columns]
+
+    agg_funcs = {}
+    for c in df.columns:
+        if c in irr_cols or c in mean_cols:
+            agg_funcs[c] = 'mean'
+        else:
+            agg_funcs[c] = 'first'
+
+    df['_group'] = df.index // 2
+    df_hourly = df.groupby('_group').agg(agg_funcs).reset_index(drop=True)
+    df_hourly = df_hourly[df.columns.drop('_group')]
+
+    filename = pathlib.Path(filepath).name
+    log_info(f"Resampled 30-min → 60-min: {filename}")
+
+    with open(filepath, 'w') as fh:
+        fh.write(header_line0)
+        fh.write(header_line1)
+        fh.write(col_line)
+        df_hourly.to_csv(fh, index=False, header=False)
 
 
 def find_nearest(point, set_of_points):
@@ -148,10 +298,10 @@ def check_nsrdb_connectivity() -> bool:
     """Ping the NLR API to verify connectivity and credentials."""
     api_key = os.getenv('NSRDB_API_KEY')
     url = (
-        "https://developer.nlr.gov/api/nsrdb/v2/solar/psm3/"
+        "https://developer.nlr.gov/api/nsrdb/v2/solar/nsrdb-GOES-aggregated-v4-0-0-download"
         f"?api_key={api_key}&wkt=POINT(-100+33)&names=2017"
         "&interval=60&attributes=ghi&email="
-        + os.getenv('NREL_EMAIL', '')
+        + os.getenv('NSRDB_API_EMAIL', '')
     )
     try:
         r = requests.get(url, timeout=15)
