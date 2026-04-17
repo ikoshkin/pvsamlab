@@ -12,6 +12,12 @@ Fix 1 – OND file lookup: find_ond_file() returns the path *string*, not the
 Fix 2 – File descriptor safety: run_simulation() accepts only serialisable
          arguments (strings, ints, floats). All file I/O — PAN, OND, weather —
          happens inside the worker after the pool forks, never before.
+Fix 3 – Weather file validation: run_simulation() validates the weather file
+         before passing it to SAM and fast-fails with a clear reason on corrupt
+         files, avoiding long SAM hangs.
+Fix 4 – Pre-flight validation: main() downloads and validates all weather files
+         sequentially before launching workers, prints a status table, and asks
+         the user to confirm before spending parallel compute on known failures.
 """
 
 import os
@@ -21,6 +27,7 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from pvsamlab.system import System, OND_DEFAULT
+from pvsamlab.climate import validate_weather_file, download_nsrdb_csv
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -66,17 +73,50 @@ def find_ond_file(folder_path):
     return None
 
 
+def _pre_validate_weather_files(years, lat, lon):
+    """Download and validate weather files for all years sequentially.
+
+    Sequential (not parallel) to avoid API rate limits.
+
+    Returns
+    -------
+    dict mapping year (int) → {path, status, validation}
+        status is one of: 'ok', 'nan_warning', 'corrupt', 'missing'
+    """
+    info = {}
+    print(f"\nPre-validating weather files for {len(years)} year(s)...")
+    for year in years:
+        path = download_nsrdb_csv((lat, lon), str(year))
+        if path is None:
+            info[year] = {'path': None, 'status': 'missing', 'validation': None}
+            continue
+        v = validate_weather_file(path)
+        if v['valid']:
+            status = 'ok'
+        elif v['issue'] and 'nan' in v['issue'].lower():
+            status = 'nan_warning'
+        else:
+            status = 'corrupt'
+        info[year] = {'path': path, 'status': status, 'validation': v}
+    return info
+
+
 # ---------------------------------------------------------------------------
 # Simulation worker
 # ---------------------------------------------------------------------------
 
-def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon, system_kwargs):
+def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon,
+                   system_kwargs, weather_file_path, weather_file_status):
     """Run a single PySAM simulation inside a worker process.
 
     Fix 2: all arguments are plain strings/ints/floats — no file handles are
     opened or passed from the parent. All file I/O (PAN, OND, weather) happens
     here, after the pool has forked, so there are no inherited file descriptors
     to go stale.
+
+    Fix 3: validates the weather file before passing it to SAM. If the file is
+    known-bad (corrupt/missing from pre-flight) or fails re-validation here,
+    returns immediately with a descriptive error instead of letting SAM hang.
 
     system_kwargs is a plain dict of extra keyword arguments forwarded to
     System() (e.g. soiling, dc_wiring_loss, tracking_mode, …).
@@ -86,6 +126,34 @@ def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon, syste
     (summary_dict, df_hourly) on success
     (error_dict,   None)      on failure
     """
+    module_stem = pathlib.Path(pan_file).stem
+
+    # Fast-fail if pre-flight already flagged this file as unusable
+    if weather_file_status in ('corrupt', 'missing') or weather_file_path is None:
+        return {
+            "Error": f"Weather file invalid: {weather_file_status}",
+            "Module": module_stem,
+            "Year": year,
+            "ModulesPerString": modules_per_string,
+            "VocMax": float('nan'),
+            "MPPTLoss": float('nan'),
+            "weather_file_status": weather_file_status,
+        }, None
+
+    # Re-validate in the worker before handing off to SAM
+    v = validate_weather_file(weather_file_path)
+    if not v['valid']:
+        issue = v['issue'] or 'unknown'
+        return {
+            "Error": f"Weather file invalid: {issue}",
+            "Module": module_stem,
+            "Year": year,
+            "ModulesPerString": modules_per_string,
+            "VocMax": float('nan'),
+            "MPPTLoss": float('nan'),
+            "weather_file_status": 'corrupt',
+        }, None
+
     try:
         plant = System(
             met_year=str(year),
@@ -104,6 +172,7 @@ def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon, syste
             "ModulesPerString": modules_per_string,
             "VocMax": round(max(plant.model.Outputs.subarray1_voc), 2),
             "MPPTLoss": round(plant.model.Outputs.annual_dc_invmppt_loss, 2),
+            "weather_file_status": weather_file_status,
         }
 
         voc = plant.model.Outputs.subarray1_voc
@@ -138,9 +207,12 @@ def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon, syste
     except Exception as exc:
         return {
             "Error": str(exc),
-            "Module": pathlib.Path(pan_file).stem,
+            "Module": module_stem,
             "Year": year,
             "ModulesPerString": modules_per_string,
+            "VocMax": float('nan'),
+            "MPPTLoss": float('nan'),
+            "weather_file_status": weather_file_status,
         }, None
 
 
@@ -187,8 +259,9 @@ def main(
 
     Returns
     -------
-    dict
-        Keys: summary_path, hourly_path, n_total, n_failed, elapsed_s.
+    dict or None
+        Keys: run_dir, summary_path, hourly_path, n_total, n_failed, elapsed_s.
+        Returns None if user aborts at the pre-flight confirmation prompt.
     """
     from datetime import datetime
 
@@ -216,8 +289,38 @@ def main(
     if not pan_files:
         raise ValueError(f"No .PAN files found in: {pan_folders}")
 
+    # ------------------------------------------------------------------
+    # Fix 4 — Pre-flight: download + validate all weather files first
+    # ------------------------------------------------------------------
+    years = sorted(set(year_range))
+    weather_info = _pre_validate_weather_files(years, lat, lon)
+
+    print(f"\n{'Year':<6} {'Status':<14} {'NaN%':<8} {'Interval':<10} File")
+    print("-" * 72)
+    for year in years:
+        wi = weather_info[year]
+        v  = wi['validation']
+        nan_pct      = f"{v['nan_fraction']:.1%}" if v and v['nan_fraction'] is not None else 'N/A'
+        interval_str = f"{v['interval']}-min"     if v and v['interval']      is not None else 'N/A'
+        fname        = pathlib.Path(wi['path']).name if wi['path'] else 'N/A'
+        print(f"{year:<6} {wi['status']:<14} {nan_pct:<8} {interval_str:<10} {fname}")
+
+    n_ok   = sum(1 for wi in weather_info.values() if wi['status'] == 'ok')
+    n_warn = sum(1 for wi in weather_info.values() if wi['status'] == 'nan_warning')
+    n_bad  = sum(1 for wi in weather_info.values() if wi['status'] in ('corrupt', 'missing'))
+    total  = len(years)
+    print(
+        f"\n{n_ok}/{total} weather files OK, "
+        f"{n_warn} have warnings, {n_bad} corrupt/missing."
+    )
+    answer = input("Continue? [y/N] ").strip().lower()
+    if answer != 'y':
+        print("Aborted.")
+        return None
+
     tasks = [
-        (pan, ond_file, year, mps, lat, lon, _system_kwargs)
+        (pan, ond_file, year, mps, lat, lon, _system_kwargs,
+         weather_info[year]['path'], weather_info[year]['status'])
         for pan in pan_files
         for year in year_range
         for mps in string_range
@@ -228,7 +331,7 @@ def main(
     n_failed = 0
     t_start = time.time()
 
-    print(f"Running {len(tasks)} simulations with {num_workers} parallel workers...")
+    print(f"\nRunning {len(tasks)} simulations with {num_workers} parallel workers...")
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = {executor.submit(run_simulation, *t): t for t in tasks}
@@ -247,7 +350,7 @@ def main(
                 n_failed += 1
 
     elapsed = time.time() - t_start
-    n_ok = len(tasks) - n_failed
+    n_ok_sim = len(tasks) - n_failed
 
     summary_path = run_dir / "string_sizing_results_summary.csv"
     hourly_path  = run_dir / "string_sizing_results_hourly.csv"
@@ -256,7 +359,7 @@ def main(
     if hourly_rows:
         pd.concat(hourly_rows, ignore_index=True).to_csv(hourly_path, index=False)
 
-    print(f"Done: {n_ok} OK, {n_failed} failed, {elapsed:.1f}s elapsed")
+    print(f"Done: {n_ok_sim} OK, {n_failed} failed, {elapsed:.1f}s elapsed")
     print(f"Results saved to: {run_dir}")
 
     return {
