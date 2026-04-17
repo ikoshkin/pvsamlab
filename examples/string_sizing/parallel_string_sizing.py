@@ -190,6 +190,8 @@ def main(
     dict
         Keys: summary_path, hourly_path, n_total, n_failed, elapsed_s.
     """
+    from datetime import datetime
+
     pan_folders   = pan_folders   if pan_folders   is not None else DEFAULT_PAN_FOLDERS
     ond_file      = ond_file      if ond_file      is not None else DEFAULT_OND_FILE
     year_range    = year_range    if year_range    is not None else DEFAULT_YEAR_RANGE
@@ -201,6 +203,11 @@ def main(
     output_dir    = pathlib.Path(output_dir) if output_dir is not None \
                     else pathlib.Path(DEFAULT_OUTPUT_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    run_id  = datetime.now().strftime("%Y%m%d_%H%M")
+    run_dir = output_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Run output folder: {run_dir}")
 
     # Collect PAN files
     pan_files = []
@@ -242,19 +249,18 @@ def main(
     elapsed = time.time() - t_start
     n_ok = len(tasks) - n_failed
 
-    summary_path = output_dir / "string_sizing_results_summary.csv"
-    hourly_path  = output_dir / "string_sizing_results_hourly.csv"
+    summary_path = run_dir / "string_sizing_results_summary.csv"
+    hourly_path  = run_dir / "string_sizing_results_hourly.csv"
 
     pd.DataFrame(summary_rows).to_csv(summary_path, index=False)
     if hourly_rows:
         pd.concat(hourly_rows, ignore_index=True).to_csv(hourly_path, index=False)
 
     print(f"Done: {n_ok} OK, {n_failed} failed, {elapsed:.1f}s elapsed")
-    print(f"  Summary CSV : {summary_path}")
-    if hourly_rows:
-        print(f"  Hourly CSV  : {hourly_path}")
+    print(f"Results saved to: {run_dir}")
 
     return {
+        "run_dir":      str(run_dir),
         "summary_path": str(summary_path),
         "hourly_path":  str(hourly_path) if hourly_rows else None,
         "n_total":      len(tasks),

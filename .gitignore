@@ -16,6 +16,7 @@ secrets.env
 examples/secrets.env
 
 # Generated outputs in per-tool outputs/ subfolders
+examples/*/outputs/*/
 examples/*/outputs/*.csv
 examples/*/outputs/*.png
 examples/*/outputs/*.log
