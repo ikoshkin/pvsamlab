@@ -64,9 +64,9 @@ The `-e` flag installs in editable mode so changes to `pvsamlab/` take effect im
 Create a `secrets.env` file in the repo root (this file is gitignored — never commit it):
 
 ```
-NREL_API_KEY=your_key_here
-NREL_EMAIL=your_email_here
-NREL_NAME=your_name_here
+NSRDB_API_KEY=your_key_here
+NSRDB_API_EMAIL=your_email_here
+NSRDB_API_NAME=your_name_here
 ```
 
 Get a free API key at [https://developer.nrel.gov/signup/](https://developer.nrel.gov/signup/). pvsamlab loads these automatically via `python-dotenv` when you call `System.run()` or `PvBessSystem.run()`.
