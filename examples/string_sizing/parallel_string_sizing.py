@@ -231,6 +231,7 @@ def main(
     output_dir=None,
     tqdm_class=None,
     system_kwargs=None,
+    interactive=False,
 ):
     """Run batch string sizing simulations.
 
@@ -259,9 +260,8 @@ def main(
 
     Returns
     -------
-    dict or None
+    dict
         Keys: run_dir, summary_path, hourly_path, n_total, n_failed, elapsed_s.
-        Returns None if user aborts at the pre-flight confirmation prompt.
     """
     from datetime import datetime
 
@@ -313,10 +313,11 @@ def main(
         f"\n{n_ok}/{total} weather files OK, "
         f"{n_warn} have warnings, {n_bad} corrupt/missing."
     )
-    answer = input("Continue? [y/N] ").strip().lower()
-    if answer != 'y':
-        print("Aborted.")
-        return None
+    if interactive and n_bad > 0:
+        answer = input("Continue? [y/N] ").strip().lower()
+        if answer != 'y':
+            print("Aborted.")
+            return None
 
     tasks = [
         (pan, ond_file, year, mps, lat, lon, _system_kwargs,
