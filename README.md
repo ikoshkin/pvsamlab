@@ -31,7 +31,7 @@ On top of the core library, the `examples/` directory contains five ready-to-run
 | pytest | >= 7.0 | Dev/test only |
 | tqdm | latest | Dev/example scripts only |
 
-You also need a **free NREL API key** for weather data downloads: [https://developer.nrel.gov/signup/](https://developer.nrel.gov/signup/)
+You also need a **free API key** for weather data downloads: [https://developer.nlr.gov/signup/](https://developer.nlr.gov/signup/)
 
 ---
 
@@ -69,7 +69,7 @@ NSRDB_API_EMAIL=your_email_here
 NSRDB_API_NAME=your_name_here
 ```
 
-Get a free API key at [https://developer.nrel.gov/signup/](https://developer.nrel.gov/signup/). pvsamlab loads these automatically via `python-dotenv` when you call `System.run()` or `PvBessSystem.run()`.
+Get a free API key at [https://developer.nlr.gov/signup/](https://developer.nlr.gov/signup/). pvsamlab loads these automatically via `python-dotenv` when you call `System.run()` or `PvBessSystem.run()`.
 
 ---
 
@@ -296,9 +296,13 @@ Configure via `BessDispatch(charging_mode='solar_only')` or by setting the SSC v
 
 ## Weather data
 
-pvsamlab downloads weather files from NREL's **National Solar Radiation Database (NSRDB)** via REST API. Files are cached locally as CSVs so subsequent runs at the same location/year do not re-download.
+pvsamlab downloads weather files from the **National Solar Radiation Database (NSRDB)** via REST API. Files are cached locally as CSVs so subsequent runs at the same location/year do not re-download.
 
-**Credentials** are loaded from `secrets.env` in the repo root via `python-dotenv`. The three required variables are `NREL_API_KEY`, `NREL_EMAIL`, and `NREL_NAME`.
+**API endpoint:** `https://developer.nlr.gov` (National Laboratory of the Rockies)
+
+> **Note:** The legacy `developer.nrel.gov` domain is deprecated and redirects to `developer.nlr.gov`. It will stop serving requests after **April 30, 2026** — update any hardcoded references in scripts or tools accordingly.
+
+**Credentials** are loaded from `secrets.env` in the repo root via `python-dotenv`. The three required variables are `NSRDB_API_KEY`, `NSRDB_API_EMAIL`, and `NSRDB_API_NAME`.
 
 **`met_year` options:**
 
@@ -306,6 +310,13 @@ pvsamlab downloads weather files from NREL's **National Solar Radiation Database
 - `'2017'` (or any year string `'1998'`–`'2022'`) — Actual measured data for a specific year. Use for historical analysis, P90 studies, or validating against metered generation.
 
 Weather files are cached under `pvsamlab/data/weather/<lat>_<lon>_<year>.csv`. Delete the cache file to force a fresh download.
+
+**Connectivity check** — before running simulations, verify your credentials and network access:
+
+```python
+from pvsamlab import check_nsrdb_connectivity
+check_nsrdb_connectivity()
+```
 
 ---
 

@@ -5,7 +5,9 @@ This module contains functions to work with NSRDB GOES v4 resources using PySAM
 import os
 import glob
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
+import requests
 import pandas as pd
 import numpy as np
 from scipy import spatial
@@ -78,7 +80,18 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
             verbose=False
         )
 
-        fetcher.fetch([(lon, lat)])
+        # PySAM's FetchResourceFiles has developer.nrel.gov hardcoded internally.
+        # That domain 301-redirects to developer.nlr.gov during the brownout period
+        # (deadline April 30 2026). Wrap with a timeout so hung downloads fail fast.
+        with ThreadPoolExecutor(max_workers=1) as _executor:
+            _future = _executor.submit(fetcher.fetch, [(lon, lat)])
+            try:
+                _future.result(timeout=60)
+            except FuturesTimeoutError:
+                raise RuntimeError(
+                    "NSRDB download timed out. Check that developer.nlr.gov "
+                    "is reachable and API credentials are valid."
+                )
         paths = fetcher.resource_file_paths
 
         cleanup_query_json(download_dir, lat, lon)
@@ -129,6 +142,31 @@ def get_ashrae_design_low(lat, lon):
     stations = df.loc[:, ['Lat', 'Lon']].values
     nearest_station_index = find_nearest((lat, lon), stations)
     return df.loc[nearest_station_index, 'ExtrLow']
+
+
+def check_nsrdb_connectivity() -> bool:
+    """Ping the NLR API to verify connectivity and credentials."""
+    api_key = os.getenv('NSRDB_API_KEY')
+    url = (
+        "https://developer.nlr.gov/api/nsrdb/v2/solar/psm3/"
+        f"?api_key={api_key}&wkt=POINT(-100+33)&names=2017"
+        "&interval=60&attributes=ghi&email="
+        + os.getenv('NREL_EMAIL', '')
+    )
+    try:
+        r = requests.get(url, timeout=15)
+        if r.status_code == 200:
+            print("NSRDB API connection OK (developer.nlr.gov)")
+            return True
+        else:
+            print(f"NSRDB API returned {r.status_code}: {r.text[:200]}")
+            return False
+    except requests.exceptions.Timeout:
+        print("NSRDB API timed out — check developer.nlr.gov is reachable")
+        return False
+    except Exception as e:
+        print(f"NSRDB API error: {e}")
+        return False
 
 
 if __name__ == '__main__':

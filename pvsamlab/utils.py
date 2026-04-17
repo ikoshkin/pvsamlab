@@ -173,7 +173,7 @@ def download_nsrdb_csv(coords, year='tmy', attributes=attrs):
     if os.path.isfile(wfname):
         return wfname
 
-    url = (f'http://developer.nrel.gov/api/solar/nsrdb_psm3_download.csv?'
+    url = (f'https://developer.nlr.gov/api/solar/nsrdb_psm3_download.csv?'
            f'api_key={api_key}&'
            f'full_name={your_name}'
            f'&email={email}'
