@@ -102,10 +102,6 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
 
         result = validate_weather_file(final_path)
 
-        if result['interval'] == 30:
-            resample_to_hourly(final_path)
-            result = validate_weather_file(final_path)
-
         if not result['valid'] and result['issue'] and 'nan' in result['issue'].lower():
             log_error(f"⚠️ Weather file has NaN issues ({result['issue']}), retrying download...")
             try:
@@ -152,15 +148,14 @@ def cleanup_query_json(folder, lat, lon):
             pass  # Silent cleanup, logging not needed per user instruction
 
 
-def validate_weather_file(filepath):
+def validate_weather_file(filepath) -> dict:
     """
-    Validate an NSRDB CSV weather file.
+    Validate an NSRDB GOES v4 CSV weather file.
 
-    Reads the 2-row metadata header and the data block to check:
-    - Interval and lat/lon present in header
-    - GHI, DNI, DHI columns exist
-    - NaN fraction in GHI/DNI/DHI < 5%
-    - Row count matches the interval (8760 for 60-min, 17520 for 30-min)
+    GOES v4 headers have no 'Interval' field (unlike older PSM3 format).
+    Interval is detected from row count: 8760 = 60-min, 17520 = 30-min.
+    Minute=30 in every data row is normal center-of-hour convention and
+    does NOT indicate a 30-minute file.
 
     Returns:
         dict with keys: valid (bool), interval (int or None),
@@ -168,52 +163,66 @@ def validate_weather_file(filepath):
         issue (str or None).
     """
     try:
-        header_keys = pd.read_csv(filepath, nrows=1, header=None).iloc[0]
-        header_vals = pd.read_csv(filepath, skiprows=1, nrows=1, header=None).iloc[0]
-        meta = dict(zip(header_keys, header_vals))
+        meta_keys = pd.read_csv(filepath, nrows=1, header=None).iloc[0].tolist()
+        meta_vals = pd.read_csv(filepath, skiprows=1, nrows=1, header=None).iloc[0].tolist()
+        meta = dict(zip(meta_keys, meta_vals))
 
-        interval_str = str(meta.get('Interval', '')).strip()
-        lat_str = str(meta.get('Latitude', '')).strip()
-        lon_str = str(meta.get('Longitude', '')).strip()
+        lat = meta.get('Latitude') or meta.get('latitude')
+        lon = meta.get('Longitude') or meta.get('longitude')
 
-        if not interval_str or interval_str == 'nan':
-            return {'valid': False, 'interval': None, 'nan_fraction': None,
-                    'row_count': None, 'issue': 'Interval missing from header'}
-
-        interval = int(float(interval_str))
-
-        if not lat_str or not lon_str or lat_str == 'nan' or lon_str == 'nan':
-            return {'valid': False, 'interval': interval, 'nan_fraction': None,
-                    'row_count': None, 'issue': 'lat/lon missing from header'}
-
+        # Skip 2 metadata rows + 1 column-header row = skiprows=2 reads data
         df = pd.read_csv(filepath, skiprows=2)
-
-        irr_cols = ['GHI', 'DNI', 'DHI']
-        missing = [c for c in irr_cols if c not in df.columns]
-        if missing:
-            return {'valid': False, 'interval': interval, 'nan_fraction': None,
-                    'row_count': len(df), 'issue': f'Missing columns: {missing}'}
-
-        nan_fraction = float(df[irr_cols].isna().values.mean())
         row_count = len(df)
-        expected = 8760 if interval == 60 else 17520
 
-        if nan_fraction >= 0.05:
-            return {'valid': False, 'interval': interval, 'nan_fraction': nan_fraction,
-                    'row_count': row_count,
-                    'issue': f'High nan fraction in irradiance: {nan_fraction:.1%}'}
+        # Detect interval from row count only; Minute=30 is center-of-hour, not 30-min data
+        if row_count == 8760:
+            interval = 60
+        elif row_count == 17520:
+            interval = 30
+        else:
+            interval = None
 
-        if row_count != expected:
-            return {'valid': False, 'interval': interval, 'nan_fraction': nan_fraction,
-                    'row_count': row_count,
-                    'issue': f'Expected {expected} rows for {interval}-min interval, got {row_count}'}
+        required = ['GHI', 'DNI', 'DHI']
+        missing_cols = [c for c in required if c not in df.columns]
 
-        return {'valid': True, 'interval': interval, 'nan_fraction': nan_fraction,
-                'row_count': row_count, 'issue': None}
+        nan_frac = 0.0
+        if not missing_cols:
+            nan_frac = float(df[required].isna().mean().mean())
+
+        valid = (
+            not missing_cols
+            and nan_frac < 0.05
+            and interval in (60, 30)
+            and lat is not None
+            and lon is not None
+        )
+
+        issue = None
+        if missing_cols:
+            issue = f"Missing columns: {missing_cols}"
+        elif nan_frac >= 0.05:
+            issue = f"NaN fraction {nan_frac:.1%} exceeds 5%"
+        elif interval is None:
+            issue = f"Unexpected row count: {row_count}"
+        elif lat is None:
+            issue = "Latitude missing from header"
+
+        return {
+            'valid': valid,
+            'interval': interval,
+            'nan_fraction': round(nan_frac, 4),
+            'row_count': row_count,
+            'issue': issue,
+        }
 
     except Exception as e:
-        return {'valid': False, 'interval': None, 'nan_fraction': None,
-                'row_count': None, 'issue': f'Read error: {e}'}
+        return {
+            'valid': False,
+            'interval': None,
+            'nan_fraction': None,
+            'row_count': None,
+            'issue': str(e),
+        }
 
 
 def resample_to_hourly(filepath):
