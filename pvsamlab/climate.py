@@ -71,6 +71,10 @@ def _download_direct(lat, lon, year, download_dir):
 
     response = requests.get(endpoint, params=params, timeout=60)
 
+    if response.status_code == 429:
+        time.sleep(30)
+        response = requests.get(endpoint, params=params, timeout=60)
+
     if response.status_code != 200:
         raise RuntimeError(
             f"NLR API error {response.status_code}: {response.text[:300]}"
@@ -122,6 +126,13 @@ def _download_direct(lat, lon, year, download_dir):
             raise RuntimeError(f"No CSV found in zip. Contents: {zf.namelist()}")
         csv_name = csv_names[0]
         csv_text = zf.read(csv_name).decode('utf-8')
+
+    # Validate row count before caching — catches partial downloads
+    df_check = pd.read_csv(io.StringIO(csv_text), skiprows=2)
+    if len(df_check) not in (8760, 17520):
+        raise RuntimeError(
+            f"Incomplete download: got {len(df_check)} rows, expected 8760 or 17520"
+        )
 
     resource = (
         'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'

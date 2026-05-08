@@ -87,6 +87,7 @@ def _pre_validate_weather_files(years, lat, lon):
     print(f"\nPre-validating weather files for {len(years)} year(s)...")
     for year in years:
         path = download_nsrdb_csv((lat, lon), str(year))
+        time.sleep(2)
         if path is None:
             info[year] = {'path': None, 'status': 'missing', 'validation': None}
             continue
