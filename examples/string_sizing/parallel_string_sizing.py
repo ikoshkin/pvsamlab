@@ -157,7 +157,7 @@ def run_simulation(pan_file, ond_file, year, modules_per_string, lat, lon,
 
     try:
         plant = System(
-            met_year=str(year),
+            met_year=weather_file_path,
             lat=lat,
             lon=lon,
             pan_file=pan_file,

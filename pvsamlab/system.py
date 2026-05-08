@@ -176,12 +176,8 @@ class System:
 
         # Location and meteo
         if os.path.exists(met_year):
+            # met_year is an existing file path — use it directly, no download.
             self.weather_file = met_year
-            with open(self.weather_file, newline='') as f:
-                reader = csv.reader(f)
-                tmy_header = next(reader)
-                self.lat = float(tmy_header[4])
-                self.lon = float(tmy_header[5])
         else:
             self.weather_file = download_nsrdb_csv(
                 coords=(self.lat, self.lon), year=met_year)
@@ -190,12 +186,13 @@ class System:
                     f"Weather file download failed for ({self.lat}, {self.lon}), "
                     f"year='{met_year}'. Check NSRDB API credentials and network access."
                 )
-            with open(self.weather_file, newline='') as f:
-                reader = csv.reader(f)
-                next(reader)  # Skip the first line
-                tmy_header = next(reader)  # Read the second line
-                self.lat = float(tmy_header[5])
-                self.lon = float(tmy_header[6])
+
+        # Parse lat/lon from NSRDB GOES v4 header (row 0 = keys, row 1 = values).
+        meta_keys = pd.read_csv(self.weather_file, nrows=1, header=None).iloc[0].tolist()
+        meta_vals = pd.read_csv(self.weather_file, skiprows=1, nrows=1, header=None).iloc[0].tolist()
+        meta = dict(zip(meta_keys, meta_vals))
+        self.lat = float(meta.get('Latitude') or meta.get('latitude'))
+        self.lon = float(meta.get('Longitude') or meta.get('longitude'))
 
         self.design_low_temp = get_ashrae_design_low(self.lat, self.lon)
 
