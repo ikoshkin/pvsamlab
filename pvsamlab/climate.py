@@ -103,6 +103,9 @@ def _download_direct(lat, lon, year, download_dir):
     if not download_url:
         raise RuntimeError(f"NLR API returned no downloadUrl: {response.text[:300]}")
 
+    # Give S3 time to finish writing the zip before the first fetch.
+    time.sleep(2)
+
     # Poll S3 until the zip is ready (generated server-side)
     deadline = time.monotonic() + 300  # 5 min max
     delay = 5
@@ -119,20 +122,30 @@ def _download_direct(lat, lon, year, download_dir):
             continue
         raise RuntimeError(f"S3 download error {r.status_code}: {r.text[:200]}")
 
-    # Extract the single CSV from the zip
-    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
-        csv_names = [n for n in zf.namelist() if n.endswith('.csv')]
-        if not csv_names:
-            raise RuntimeError(f"No CSV found in zip. Contents: {zf.namelist()}")
-        csv_name = csv_names[0]
-        csv_text = zf.read(csv_name).decode('utf-8')
+    def _unzip_csv(zip_bytes):
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = [n for n in zf.namelist() if n.endswith('.csv')]
+            if not names:
+                raise RuntimeError(f"No CSV found in zip. Contents: {zf.namelist()}")
+            return zf.read(names[0]).decode('utf-8')
 
-    # Validate row count before caching — catches partial downloads
+    csv_text = _unzip_csv(r.content)
+
+    # Validate row count. If partial (server still writing), wait 5s and retry
+    # the same S3 URL once before failing — no need to re-request from NLR API.
     df_check = pd.read_csv(io.StringIO(csv_text), skiprows=2)
     if len(df_check) not in (8760, 17520):
-        raise RuntimeError(
-            f"Incomplete download: got {len(df_check)} rows, expected 8760 or 17520"
-        )
+        time.sleep(5)
+        r2 = requests.get(download_url, timeout=60)
+        if r2.status_code != 200:
+            raise RuntimeError(f"S3 retry error {r2.status_code}: {r2.text[:200]}")
+        csv_text = _unzip_csv(r2.content)
+        df_check = pd.read_csv(io.StringIO(csv_text), skiprows=2)
+        if len(df_check) not in (8760, 17520):
+            raise RuntimeError(
+                f"Incomplete download after retry: got {len(df_check)} rows, "
+                f"expected 8760 or 17520"
+            )
 
     resource = (
         'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'
