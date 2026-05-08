@@ -27,7 +27,11 @@ import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from pvsamlab.system import System, OND_DEFAULT
-from pvsamlab.climate import validate_weather_file, download_nsrdb_csv
+from pvsamlab.climate import (
+    validate_weather_file,
+    download_nsrdb_csv,
+    download_weather_files,
+)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -233,6 +237,7 @@ def main(
     tqdm_class=None,
     system_kwargs=None,
     interactive=False,
+    weather_files=None,
 ):
     """Run batch string sizing simulations.
 
@@ -291,29 +296,30 @@ def main(
         raise ValueError(f"No .PAN files found in: {pan_folders}")
 
     # ------------------------------------------------------------------
-    # Fix 4 — Pre-flight: download + validate all weather files first
+    # Weather file dispatch — use pre-downloaded files when provided.
     # ------------------------------------------------------------------
     years = sorted(set(year_range))
-    weather_info = _pre_validate_weather_files(years, lat, lon)
 
-    print(f"\n{'Year':<6} {'Status':<14} {'NaN%':<8} {'Interval':<10} File")
-    print("-" * 72)
-    for year in years:
-        wi = weather_info[year]
-        v  = wi['validation']
-        nan_pct      = f"{v['nan_fraction']:.1%}" if v and v['nan_fraction'] is not None else 'N/A'
-        interval_str = f"{v['interval']}-min"     if v and v['interval']      is not None else 'N/A'
-        fname        = pathlib.Path(wi['path']).name if wi['path'] else 'N/A'
-        print(f"{year:<6} {wi['status']:<14} {nan_pct:<8} {interval_str:<10} {fname}")
+    if weather_files is None:
+        print(f"\nDownloading weather files for {len(years)} year(s)...")
+        weather_files = download_weather_files(
+            lat=lat, lon=lon, year_range=years, delay_seconds=2.0
+        )
 
-    n_ok   = sum(1 for wi in weather_info.values() if wi['status'] == 'ok')
-    n_warn = sum(1 for wi in weather_info.values() if wi['status'] == 'nan_warning')
-    n_bad  = sum(1 for wi in weather_info.values() if wi['status'] in ('corrupt', 'missing'))
-    total  = len(years)
-    print(
-        f"\n{n_ok}/{total} weather files OK, "
-        f"{n_warn} have warnings, {n_bad} corrupt/missing."
-    )
+    weather_info = {
+        year: {
+            'path':       weather_files.get(year),
+            'status':     'ok' if weather_files.get(year) else 'missing',
+            'validation': None,
+        }
+        for year in years
+    }
+
+    n_ok  = sum(1 for wi in weather_info.values() if wi['status'] == 'ok')
+    n_bad = sum(1 for wi in weather_info.values() if wi['status'] == 'missing')
+    total = len(years)
+    print(f"\n{n_ok}/{total} weather files ready, {n_bad} missing.")
+
     if interactive and n_bad > 0:
         answer = input("Continue? [y/N] ").strip().lower()
         if answer != 'y':

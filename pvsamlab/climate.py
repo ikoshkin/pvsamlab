@@ -357,6 +357,89 @@ def get_ashrae_design_low(lat, lon):
     return df.loc[nearest_station_index, 'ExtrLow']
 
 
+def download_weather_files(
+    lat: float,
+    lon: float,
+    year_range,
+    delay_seconds: float = 3.0,
+    progress_callback=None,
+) -> dict:
+    """Download NSRDB GOES v4 weather files for a location and range of years.
+
+    Skips years already cached on disk. Calls::
+
+        progress_callback(year, status, filepath, elapsed)
+
+    at each event, where *status* is one of:
+
+    * ``'cached'``      — file already on disk, no download needed
+    * ``'downloading'`` — download about to start (filepath/elapsed are None)
+    * ``'ok'``          — download succeeded
+    * ``'failed'``      — download failed (filepath is None)
+
+    Parameters
+    ----------
+    lat, lon : float
+        Site coordinates (decimal degrees).
+    year_range : iterable of int
+        Calendar years to download (e.g. ``range(1998, 2024)``).
+    delay_seconds : float
+        Seconds to sleep between downloads to avoid API rate limits.
+    progress_callback : callable, optional
+        Called after each event as described above.
+
+    Returns
+    -------
+    dict
+        Mapping ``{year (int): filepath str or None}``.
+    """
+    import time as _time
+
+    location_folder = f"{lat:.4f}_{lon:.4f}"
+    cache_dir = os.path.join(_dir, 'data', 'weather_files', location_folder, 'time_series')
+    resource  = 'nsrdb-GOES-aggregated-v4-0-0'
+
+    years = sorted(set(int(y) for y in year_range))
+    results = {}
+
+    for i, year in enumerate(years):
+        cached_path = os.path.join(
+            cache_dir,
+            f"nsrdb_{lat:.6f}_{lon:.6f}_{resource}_60_{year}.csv",
+        )
+        if os.path.exists(cached_path):
+            if progress_callback:
+                progress_callback(year, 'cached', cached_path, 0.0)
+            results[year] = cached_path
+            continue
+
+        if progress_callback:
+            progress_callback(year, 'downloading', None, None)
+
+        t0 = _time.monotonic()
+        try:
+            path = download_nsrdb_csv((lat, lon), str(year))
+            elapsed = _time.monotonic() - t0
+            if path:
+                if progress_callback:
+                    progress_callback(year, 'ok', path, elapsed)
+                results[year] = path
+            else:
+                if progress_callback:
+                    progress_callback(year, 'failed', None, elapsed)
+                results[year] = None
+        except Exception:
+            elapsed = _time.monotonic() - t0
+            if progress_callback:
+                progress_callback(year, 'failed', None, elapsed)
+            results[year] = None
+
+        if i < len(years) - 1:
+            _time.sleep(delay_seconds)
+
+    return results
+
+
 def check_nsrdb_connectivity() -> bool:
     """Ping the NLR API to verify connectivity and credentials."""
     api_key = os.getenv('NSRDB_API_KEY')
