@@ -10,7 +10,28 @@
       "Bash(cmd /c \"where gh\")",
       "Bash(ls \"c:\\\\Users\\\\KV6378\\\\OneDrive - ENGIE\\\\jupyter\\\\pvsamlab\\\\pvsamlab\\\\data\\\\modules\\\\ja29mps\"\" 2>/dev/null || ls \"c:UsersKV6378OneDrive - ENGIEjupyterpvsamlabpvsamlabdatamodules\"\")",
       "Bash(python -c \"import json; nb=json.load\\(open\\(''examples/string_sizing/string_sizing.ipynb'',encoding=''utf-8''\\)\\); print\\([c[''id''] for c in nb[''cells'']]\\)\")",
-      "Bash(jupyter nbconvert:*)"
+      "Bash(jupyter nbconvert:*)",
+      "Bash(git fetch *)",
+      "Bash(gh pr *)",
+      "Bash(brew list *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developer.nrel.gov)",
+      "WebFetch(domain:developer.nlr.gov)",
+      "Bash(python3 -c \"import json; nb=json.load\\(open\\('/Users/ihorkoshkin/jupyter/pvsamlab/examples/string_sizing/string_sizing.ipynb'\\)\\); [print\\(f'Cell {i}:\\\\n{\\\\\"=\\\\\"*40}\\\\n{c[\\\\\"source\\\\\"]}\\\\n'\\) for i, c in enumerate\\(nb['cells'][:8]\\)]\")",
+      "Bash(python3 -c \"import inspect; from PySAM.ResourceTools import FetchResourceFiles; print\\(inspect.getsource\\(FetchResourceFiles\\)\\)\")",
+      "Bash(python3 -c \"from PySAM import ResourceTools; import inspect; src=inspect.getsource\\(ResourceTools\\); print\\(src\\)\")",
+      "Bash(pip show *)",
+      "Bash(python3 -c \"import PySAM.ResourceTools as rt; import inspect; src=inspect.getsource\\(rt\\); print\\(src[:3000]\\)\")",
+      "Bash(python3 -c \"import json; nb=json.load\\(open\\('/Users/ihorkoshkin/jupyter/pvsamlab/examples/string_sizing/string_sizing.ipynb'\\)\\); [print\\(f'Cell {i}: id={c.get\\(\\\\\"id\\\\\",\\\\\"none\\\\\"\\)} type={c[\\\\\"cell_type\\\\\"]}'\\) for i, c in enumerate\\(nb['cells'][:10]\\)]\")",
+      "Bash(git add *)",
+      "Bash(git rebase *)",
+      "Bash(git stash *)",
+      "Bash(git push *)",
+      "Bash(python -c \"from pvsamlab.climate import check_nsrdb_connectivity; check_nsrdb_connectivity\\(\\)\")",
+      "Bash(git commit *)",
+      "Bash(python -c \"from pvsamlab import validate_weather_file, check_nsrdb_connectivity; print\\('imports OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('/Users/ihorkoshkin/jupyter/pvsamlab/examples/string_sizing/parallel_string_sizing.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }
