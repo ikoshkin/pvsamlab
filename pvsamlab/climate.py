@@ -33,25 +33,24 @@ def log_error(message):
 
 
 def _download_direct(lat, lon, year, download_dir):
-    """Direct NSRDB download bypassing PySAM FetchResourceFiles.
+    """Direct NSRDB CSV download via the synchronous streaming endpoint.
 
-    The NLR API returns an async JSON response with a downloadUrl pointing
-    to a zip on S3. This function follows that URL, polls until the file is
-    ready, extracts the CSV, and writes it to download_dir.
+    Returns (filepath, is_interpolated).  is_interpolated is True when the
+    CSV doesn't cover a full Jan 1 – Dec 31 calendar year, indicating the
+    server filled a source gap with modelled data.
     """
     import io
     import time
-    import zipfile
 
     if year.lower() == 'tmy':
         endpoint = (
             "https://developer.nlr.gov/api/nsrdb/v2/solar/"
-            "nsrdb-GOES-tmy-v4-0-0-download/"
+            "nsrdb-GOES-tmy-v4-0-0-download.csv"
         )
     else:
         endpoint = (
             "https://developer.nlr.gov/api/nsrdb/v2/solar/"
-            "nsrdb-GOES-aggregated-v4-0-0-download/"
+            "nsrdb-GOES-aggregated-v4-0-0-download.csv"
         )
 
     params = {
@@ -69,83 +68,43 @@ def _download_direct(lat, lon, year, download_dir):
         "interval":     "60",
     }
 
-    response = requests.get(endpoint, params=params, timeout=60)
+    response = requests.get(endpoint, params=params, timeout=120)
 
     if response.status_code == 429:
         time.sleep(30)
-        response = requests.get(endpoint, params=params, timeout=60)
+        response = requests.get(endpoint, params=params, timeout=120)
 
     if response.status_code != 200:
         raise RuntimeError(
             f"NLR API error {response.status_code}: {response.text[:300]}"
         )
 
-    content_type = response.headers.get('content-type', '')
-    if 'json' not in content_type and not response.text.strip().startswith('{'):
-        # Synchronous CSV response (unlikely but handle it)
-        resource = (
-            'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'
-            else 'nsrdb-GOES-aggregated-v4-0-0'
+    ct = response.headers.get('content-type', '')
+    is_csv = 'text/csv' in ct or response.text.lstrip().startswith('Source,')
+    if not is_csv:
+        raise RuntimeError(
+            f"NLR API returned non-CSV response: {response.text[:300]}"
         )
-        filename = f"nsrdb_{lat:.6f}_{lon:.6f}_{resource}_60_{year}.csv"
-        filepath = os.path.join(download_dir, filename)
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(response.text)
-        return filepath
 
-    # Async response: parse JSON and follow downloadUrl
-    data = response.json()
-    errors = data.get('errors', [])
-    if errors:
-        raise RuntimeError(f"NLR API errors: {errors}")
+    csv_text = response.text
 
-    download_url = data.get('outputs', {}).get('downloadUrl')
-    if not download_url:
-        raise RuntimeError(f"NLR API returned no downloadUrl: {response.text[:300]}")
-
-    # Give S3 time to finish writing the zip before the first fetch.
-    time.sleep(2)
-
-    # Poll S3 until the zip is ready (generated server-side)
-    deadline = time.monotonic() + 300  # 5 min max
-    delay = 5
-    while True:
-        r = requests.get(download_url, timeout=60)
-        if r.status_code == 200:
-            break
-        if r.status_code == 403:
-            # Pre-signed URL expired or file not yet generated
-            if time.monotonic() > deadline:
-                raise RuntimeError("Timed out waiting for NSRDB file to be generated (5 min)")
-            time.sleep(delay)
-            delay = min(delay * 2, 30)
-            continue
-        raise RuntimeError(f"S3 download error {r.status_code}: {r.text[:200]}")
-
-    def _unzip_csv(zip_bytes):
-        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            names = [n for n in zf.namelist() if n.endswith('.csv')]
-            if not names:
-                raise RuntimeError(f"No CSV found in zip. Contents: {zf.namelist()}")
-            return zf.read(names[0]).decode('utf-8')
-
-    csv_text = _unzip_csv(r.content)
-
-    # Validate row count. If partial (server still writing), wait 5s and retry
-    # the same S3 URL once before failing — no need to re-request from NLR API.
-    df_check = pd.read_csv(io.StringIO(csv_text), skiprows=2)
+    import io as _io
+    df_check = pd.read_csv(_io.StringIO(csv_text), skiprows=2)
     if len(df_check) not in (8760, 17520):
-        time.sleep(5)
-        r2 = requests.get(download_url, timeout=60)
-        if r2.status_code != 200:
-            raise RuntimeError(f"S3 retry error {r2.status_code}: {r2.text[:200]}")
-        csv_text = _unzip_csv(r2.content)
-        df_check = pd.read_csv(io.StringIO(csv_text), skiprows=2)
-        if len(df_check) not in (8760, 17520):
-            raise RuntimeError(
-                f"Incomplete download after retry: got {len(df_check)} rows, "
-                f"expected 8760 or 17520"
-            )
+        raise RuntimeError(
+            f"Incomplete data: got {len(df_check)} rows, expected 8760 or 17520"
+        )
+
+    # Flag years whose date range doesn't span Jan 1 – Dec 31: the server
+    # filled a source gap and some rows may be modelled rather than observed.
+    first_month = int(df_check.iloc[0]['Month'])
+    first_day   = int(df_check.iloc[0]['Day'])
+    last_month  = int(df_check.iloc[-1]['Month'])
+    last_day    = int(df_check.iloc[-1]['Day'])
+    is_interpolated = not (
+        first_month == 1 and first_day == 1 and
+        last_month == 12 and last_day == 31
+    )
 
     resource = (
         'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'
@@ -156,17 +115,19 @@ def _download_direct(lat, lon, year, download_dir):
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(csv_text)
 
-    return filepath
+    return filepath, is_interpolated
 
 
-def download_nsrdb_csv(coords, year='tmy', interval=60):
+def download_nsrdb_csv(coords, year='tmy', interval=60, _meta_out=None):
     """
-    Downloads a single NSRDB GOES v4 resource CSV using PySAM into a per-location/year-type folder.
+    Downloads a single NSRDB GOES v4 resource CSV into a per-location/year-type folder.
 
     Args:
         coords (tuple): (lat, lon)
         year (str): 'tmy' or a specific calendar year like '2017'
         interval (int): 60 or 30 (only 60 for 'tmy')
+        _meta_out (list, optional): internal — if provided, a dict with key
+            'interpolated' (bool) is appended after a successful download.
 
     Returns:
         str or None: path to downloaded CSV file
@@ -189,7 +150,14 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
     os.makedirs(download_dir, exist_ok=True)
 
     try:
-        final_path = _download_direct(lat, lon, year, download_dir)
+        final_path, is_interpolated = _download_direct(lat, lon, year, download_dir)
+        if is_interpolated:
+            log_info(
+                f"Source gap filled with modelled data: "
+                f"year {year} at ({lat:.4f}, {lon:.4f})"
+            )
+        if _meta_out is not None:
+            _meta_out.append({'interpolated': is_interpolated})
     except Exception as e:
         log_error(f"Download failed: {e}")
         return None
@@ -385,10 +353,11 @@ def download_weather_files(
 
     at each event, where *status* is one of:
 
-    * ``'cached'``      — file already on disk, no download needed
-    * ``'downloading'`` — download about to start (filepath/elapsed are None)
-    * ``'ok'``          — download succeeded
-    * ``'failed'``      — download failed (filepath is None)
+    * ``'cached'``        — file already on disk, no download needed
+    * ``'downloading'``   — download about to start (filepath/elapsed are None)
+    * ``'ok'``            — download succeeded, full calendar year data
+    * ``'interpolated'``  — download succeeded but server filled a source gap
+    * ``'failed'``        — download failed (filepath is None)
 
     Parameters
     ----------
@@ -431,11 +400,14 @@ def download_weather_files(
 
         t0 = _time.monotonic()
         try:
-            path = download_nsrdb_csv((lat, lon), str(year))
+            _meta = []
+            path = download_nsrdb_csv((lat, lon), str(year), _meta_out=_meta)
             elapsed = _time.monotonic() - t0
             if path:
+                is_interpolated = _meta[0]['interpolated'] if _meta else False
+                status = 'interpolated' if is_interpolated else 'ok'
                 if progress_callback:
-                    progress_callback(year, 'ok', path, elapsed)
+                    progress_callback(year, status, path, elapsed)
                 results[year] = path
             else:
                 if progress_callback:
