@@ -30,5 +30,19 @@ examples/*/outputs/*.pdf
 pvsamlab/data/tmp/
 pvsamlab/data/weather_files/
 
-# Legacy patterns (kept for safety during transition)
+# Secrets (belt-and-suspenders — also listed above individually)
+**/secrets.env
+**/.env
+
+# Internal planning / audit docs
+AUDIT.md
+PROGRESS.md
+BESS_DESIGN.md
+
+# Generated data files
 df.csv
+string_sizing_results.csv
+pvsamlab/data/untitled_pvsamv1.json
+
+# Executed notebook snapshots
+examples/bess_sandbox/bess_sandbox_executed.ipynb
