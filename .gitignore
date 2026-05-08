@@ -1,6 +1,7 @@
 # Ignore unnecessary files
 .claude/
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -29,6 +30,11 @@ examples/*/outputs/*.pdf
 # Note: DAMPriceExample.csv in pvsamlab/data/ IS committed (source data)
 pvsamlab/data/tmp/
 pvsamlab/data/weather_files/
+**/weather_files/
+
+# Build artifacts
+pvsamlab.egg-info/
+*.egg-info/
 
 # Secrets (belt-and-suspenders — also listed above individually)
 **/secrets.env
@@ -43,6 +49,7 @@ BESS_DESIGN.md
 df.csv
 string_sizing_results.csv
 pvsamlab/data/untitled_pvsamv1.json
+**/untitled_*.json
 
 # Executed notebook snapshots
 examples/bess_sandbox/bess_sandbox_executed.ipynb
