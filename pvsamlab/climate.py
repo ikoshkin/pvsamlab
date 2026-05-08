@@ -5,14 +5,12 @@ This module contains functions to work with NSRDB GOES v4 resources using PySAM
 import os
 import glob
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 import requests
 import pandas as pd
 import numpy as np
 from scipy import spatial
 from dotenv import load_dotenv
-from PySAM.ResourceTools import FetchResourceFiles
 
 # Load secrets
 _dir = os.path.dirname(__file__)
@@ -32,6 +30,109 @@ def log_info(message):
 
 def log_error(message):
     logger.error(message)
+
+
+def _download_direct(lat, lon, year, download_dir):
+    """Direct NSRDB download bypassing PySAM FetchResourceFiles.
+
+    The NLR API returns an async JSON response with a downloadUrl pointing
+    to a zip on S3. This function follows that URL, polls until the file is
+    ready, extracts the CSV, and writes it to download_dir.
+    """
+    import io
+    import time
+    import zipfile
+
+    if year.lower() == 'tmy':
+        endpoint = (
+            "https://developer.nlr.gov/api/nsrdb/v2/solar/"
+            "nsrdb-GOES-tmy-v4-0-0-download/"
+        )
+    else:
+        endpoint = (
+            "https://developer.nlr.gov/api/nsrdb/v2/solar/"
+            "nsrdb-GOES-aggregated-v4-0-0-download/"
+        )
+
+    params = {
+        "api_key":      api_key,
+        "full_name":    your_name,
+        "email":        email,
+        "affiliation":  "pvsamlab",
+        "reason":       "research",
+        "mailing_list": "false",
+        "wkt":          f"POINT({lon} {lat})",
+        "names":        year,
+        "attributes":   attrs,
+        "leap_day":     "false",
+        "utc":          "false",
+        "interval":     "60",
+    }
+
+    response = requests.get(endpoint, params=params, timeout=60)
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"NLR API error {response.status_code}: {response.text[:300]}"
+        )
+
+    content_type = response.headers.get('content-type', '')
+    if 'json' not in content_type and not response.text.strip().startswith('{'):
+        # Synchronous CSV response (unlikely but handle it)
+        resource = (
+            'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'
+            else 'nsrdb-GOES-aggregated-v4-0-0'
+        )
+        filename = f"nsrdb_{lat:.6f}_{lon:.6f}_{resource}_60_{year}.csv"
+        filepath = os.path.join(download_dir, filename)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(response.text)
+        return filepath
+
+    # Async response: parse JSON and follow downloadUrl
+    data = response.json()
+    errors = data.get('errors', [])
+    if errors:
+        raise RuntimeError(f"NLR API errors: {errors}")
+
+    download_url = data.get('outputs', {}).get('downloadUrl')
+    if not download_url:
+        raise RuntimeError(f"NLR API returned no downloadUrl: {response.text[:300]}")
+
+    # Poll S3 until the zip is ready (generated server-side)
+    deadline = time.monotonic() + 300  # 5 min max
+    delay = 5
+    while True:
+        r = requests.get(download_url, timeout=60)
+        if r.status_code == 200:
+            break
+        if r.status_code == 403:
+            # Pre-signed URL expired or file not yet generated
+            if time.monotonic() > deadline:
+                raise RuntimeError("Timed out waiting for NSRDB file to be generated (5 min)")
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+            continue
+        raise RuntimeError(f"S3 download error {r.status_code}: {r.text[:200]}")
+
+    # Extract the single CSV from the zip
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        csv_names = [n for n in zf.namelist() if n.endswith('.csv')]
+        if not csv_names:
+            raise RuntimeError(f"No CSV found in zip. Contents: {zf.namelist()}")
+        csv_name = csv_names[0]
+        csv_text = zf.read(csv_name).decode('utf-8')
+
+    resource = (
+        'nsrdb-GOES-tmy-v4-0-0' if year == 'tmy'
+        else 'nsrdb-GOES-aggregated-v4-0-0'
+    )
+    filename = f"nsrdb_{lat:.6f}_{lon:.6f}_{resource}_60_{year}.csv"
+    filepath = os.path.join(download_dir, filename)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(csv_text)
+
+    return filepath
 
 
 def download_nsrdb_csv(coords, year='tmy', interval=60):
@@ -54,10 +155,8 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
         raise ValueError("`year` must be a string like 'tmy' or '2017'.")
 
     if year.lower() == 'tmy':
-        resource_type = 'nsrdb-GOES-tmy-v4-0-0'
         year_type_folder = 'tmy'
     elif year.isdigit():
-        resource_type = 'nsrdb-GOES-aggregated-v4-0-0'
         year_type_folder = 'time_series'
     else:
         raise ValueError("`year` must be 'tmy' or a numeric calendar year string like '2017'.")
@@ -65,73 +164,17 @@ def download_nsrdb_csv(coords, year='tmy', interval=60):
     download_dir = os.path.join(_dir, 'data', 'weather_files', location_folder, year_type_folder)
     os.makedirs(download_dir, exist_ok=True)
 
-    def _run_fetcher():
-        fetcher = FetchResourceFiles(
-            tech='solar',
-            nrel_api_key=api_key,
-            nrel_api_email=email,
-            resource_type=resource_type,
-            resource_year=year,
-            resource_interval_min=interval,
-            resource_dir=download_dir,
-            verbose=False
-        )
-        # PySAM's FetchResourceFiles has developer.nrel.gov hardcoded internally.
-        # That domain 301-redirects to developer.nlr.gov during the brownout period
-        # (deadline April 30 2026). Wrap with a timeout so hung downloads fail fast.
-        with ThreadPoolExecutor(max_workers=1) as _executor:
-            _future = _executor.submit(fetcher.fetch, [(lon, lat)])
-            try:
-                _future.result(timeout=60)
-            except FuturesTimeoutError:
-                raise RuntimeError(
-                    "NSRDB download timed out. Check that developer.nlr.gov "
-                    "is reachable and API credentials are valid."
-                )
-        return fetcher.resource_file_paths
-
     try:
-        paths = _run_fetcher()
-        cleanup_query_json(download_dir, lat, lon)
-
-        if not paths:
-            log_error("❌ PySAM returned no resource files.")
-            return None
-
-        final_path = paths[0]
-
-        result = validate_weather_file(final_path)
-
-        if not result['valid'] and result['issue'] and 'nan' in result['issue'].lower():
-            log_error(f"⚠️ Weather file has NaN issues ({result['issue']}), retrying download...")
-            try:
-                os.remove(final_path)
-            except OSError:
-                pass
-            try:
-                paths2 = _run_fetcher()
-                cleanup_query_json(download_dir, lat, lon)
-                if not paths2:
-                    log_error("⚠️ Retry returned no resource files.")
-                    return None
-                final_path = paths2[0]
-                result2 = validate_weather_file(final_path)
-                if not result2['valid']:
-                    log_error(
-                        f"⚠️ Re-downloaded file also failed validation "
-                        f"({result2['issue']}). Returning path anyway."
-                    )
-            except Exception as retry_exc:
-                log_error(f"⚠️ Retry download failed: {retry_exc}")
-                return None
-        elif not result['valid']:
-            log_error(f"⚠️ Weather file validation failed: {result['issue']}")
-
-        return final_path
-
+        final_path = _download_direct(lat, lon, year, download_dir)
     except Exception as e:
-        log_error(f"❌ PySAM download failed: {e}")
+        log_error(f"Download failed: {e}")
         return None
+
+    result = validate_weather_file(final_path)
+    if not result['valid']:
+        log_error(f"⚠️ Weather file validation failed: {result['issue']}")
+
+    return final_path
 
 
 def cleanup_query_json(folder, lat, lon):
