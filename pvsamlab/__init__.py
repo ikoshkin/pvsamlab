@@ -30,7 +30,6 @@ from pvsamlab.climate import (
     check_nsrdb_connectivity,
     validate_weather_file,
     download_weather_files,
-    find_local_weather_file,
 )
 
 __all__ = [
@@ -60,5 +59,4 @@ __all__ = [
     "check_nsrdb_connectivity",
     "validate_weather_file",
     "download_weather_files",
-    "find_local_weather_file",
 ]

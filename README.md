@@ -186,33 +186,9 @@ check_nsrdb_connectivity()
 
 ## Working offline / corporate networks
 
-If the NSRDB API is unreachable (no internet, VPN restrictions, firewall), you can supply weather files locally. pvsamlab checks these locations automatically before making any API call:
+To use pre-downloaded weather files, drop them in `pvsamlab/data/weather_files/`. Files are matched by lat/lon and year in the filename. CSV, EPW, and TMY3 formats are accepted.
 
-1. **pvsamlab cache** — files previously downloaded to `pvsamlab/data/weather_files/<lat>_<lon>/time_series/`
-2. **SAM Desktop UI** — if you downloaded files through the SAM application, they land in `~/SAM Downloaded Weather Files/` or `~/Documents/SAM Downloaded Weather Files/` and are picked up automatically
-
-You can also drop files in any folder and point pvsamlab at it via `search_dirs`:
-
-```python
-from pvsamlab.climate import download_weather_files
-
-weather_files = download_weather_files(
-    lat=33.03, lon=-100.08,
-    year_range=range(1998, 2024),
-    search_dirs=["/path/to/my/weather_files"],
-)
-```
-
-**Supported file formats and naming conventions**
-
-| Source | Example filename | Notes |
-|---|---|---|
-| pvsamlab cache | `nsrdb_33.027755_-100.081376_nsrdb-GOES-aggregated-v4-0-0_60_2017.csv` | Auto-detected |
-| SAM Desktop UI | `750327_33.03_-100.08_2017.csv` | Auto-detected in default SAM folder |
-| PVGIS EPW | `33.03_-100.08_2017.epw` | Detected via `.epw` extension |
-| Any CSV | `*33.03*-100.08*2017*.csv` | Flexible fallback pattern |
-
-The string sizing notebook exposes `SEARCH_DIRS = []` in its Configuration cell — fill it with paths to your weather file collection to run entirely offline.
+pvsamlab checks that folder recursively before making any API call, so any file whose name contains the site lat/lon (to 2 decimal places) and year will be found automatically — no configuration required.
 
 ---
 
