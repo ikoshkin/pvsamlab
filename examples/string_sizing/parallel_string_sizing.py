@@ -238,6 +238,7 @@ def main(
     system_kwargs=None,
     interactive=False,
     weather_files=None,
+    search_dirs=None,
 ):
     """Run batch string sizing simulations.
 
@@ -263,6 +264,11 @@ def main(
     system_kwargs : dict, optional
         Extra keyword arguments forwarded to System() for each simulation
         (e.g. soiling, dc_wiring_loss, tracking_mode, tilt, azimuth, …).
+    search_dirs : list of str or Path, optional
+        Additional directories to search for local weather files before
+        downloading. Enables offline use with SAM-downloaded or user-provided
+        files. See pvsamlab.climate.find_local_weather_file for naming
+        conventions.
 
     Returns
     -------
@@ -277,10 +283,10 @@ def main(
     string_range  = string_range  if string_range  is not None else DEFAULT_STRING_RANGE
     lat           = lat           if lat           is not None else DEFAULT_LAT
     lon           = lon           if lon           is not None else DEFAULT_LON
-    num_workers   = num_workers   if num_workers   is not None else DEFAULT_NUM_WORKERS
+    num_workers    = num_workers   if num_workers   is not None else DEFAULT_NUM_WORKERS
     _system_kwargs = system_kwargs if system_kwargs is not None else {}
-    output_dir    = pathlib.Path(output_dir) if output_dir is not None \
-                    else pathlib.Path(DEFAULT_OUTPUT_DIR)
+    output_dir     = pathlib.Path(output_dir) if output_dir is not None \
+                     else pathlib.Path(DEFAULT_OUTPUT_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_id  = datetime.now().strftime("%Y%m%d_%H%M")
@@ -303,7 +309,8 @@ def main(
     if weather_files is None:
         print(f"\nDownloading weather files for {len(years)} year(s)...")
         weather_files = download_weather_files(
-            lat=lat, lon=lon, year_range=years, delay_seconds=2.0
+            lat=lat, lon=lon, year_range=years, delay_seconds=2.0,
+            search_dirs=search_dirs,
         )
 
     weather_info = {

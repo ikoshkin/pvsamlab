@@ -5,6 +5,7 @@ This module contains functions to work with NSRDB GOES v4 resources using PySAM
 import os
 import glob
 import logging
+from pathlib import Path
 
 import requests
 import pandas as pd
@@ -21,6 +22,11 @@ email = os.getenv('NSRDB_API_EMAIL')
 your_name = os.getenv('NSRDB_API_NAME')
 
 attrs = 'dhi,dni,ghi,air_temperature,surface_pressure,wind_direction,wind_speed'
+
+_SAM_UI_DIRS = [
+    Path.home() / "SAM Downloaded Weather Files",
+    Path.home() / "Documents" / "SAM Downloaded Weather Files",
+]
 
 # Centralized logging functions
 logger = logging.getLogger(__name__)
@@ -118,9 +124,12 @@ def _download_direct(lat, lon, year, download_dir):
     return filepath, is_interpolated
 
 
-def download_nsrdb_csv(coords, year='tmy', interval=60, _meta_out=None):
+def download_nsrdb_csv(coords, year='tmy', interval=60, _meta_out=None, search_dirs=None):
     """
     Downloads a single NSRDB GOES v4 resource CSV into a per-location/year-type folder.
+
+    Checks local files (pvsamlab cache, SAM UI folders, search_dirs) before
+    attempting any API download.
 
     Args:
         coords (tuple): (lat, lon)
@@ -128,11 +137,21 @@ def download_nsrdb_csv(coords, year='tmy', interval=60, _meta_out=None):
         interval (int): 60 or 30 (only 60 for 'tmy')
         _meta_out (list, optional): internal — if provided, a dict with key
             'interpolated' (bool) is appended after a successful download.
+        search_dirs (list of str/Path, optional): additional directories to
+            search for local weather files before downloading.
 
     Returns:
         str or None: path to downloaded CSV file
     """
     lat, lon = coords
+
+    # Check local files before attempting any API download
+    local = find_local_weather_file(lat, lon, year, search_dirs)
+    if local is not None:
+        log_info(f"Using local weather file: {local}")
+        if _meta_out is not None:
+            _meta_out.append({'interpolated': False})
+        return local
 
     location_folder = f"{lat:.4f}_{lon:.4f}"
 
@@ -181,6 +200,47 @@ def cleanup_query_json(folder, lat, lon):
             os.remove(f)
         except Exception:
             pass  # Silent cleanup, logging not needed per user instruction
+
+
+def find_local_weather_file(lat, lon, year, search_dirs=None):
+    """
+    Search for a cached or user-provided weather file.
+
+    Searches:
+    1. pvsamlab cache (exact naming)
+    2. SAM Downloaded Weather Files folder
+    3. User-specified search_dirs
+
+    Matches files by lat/lon proximity (4 decimal places) and year.
+    Returns first match or None.
+    """
+    # 1. pvsamlab cache — exact naming convention
+    resource = 'nsrdb-GOES-aggregated-v4-0-0'
+    exact = (
+        Path(_dir) / 'data' / 'weather_files' /
+        f"{lat:.4f}_{lon:.4f}" / 'time_series' /
+        f"nsrdb_{lat:.6f}_{lon:.6f}_{resource}_60_{year}.csv"
+    )
+    if exact.exists():
+        return str(exact)
+
+    # 2 & 3. External directories — flexible glob patterns
+    external_dirs = list(search_dirs or []) + _SAM_UI_DIRS
+    patterns = [
+        f"nsrdb_{lat:.4f}*_{lon:.4f}*_{year}*.csv",
+        f"*{lat:.2f}_{lon:.2f}*{year}*.csv",
+        f"*{lat:.2f}_{lon:.2f}*{year}*.epw",
+    ]
+    for dir_path in external_dirs:
+        dp = Path(dir_path)
+        if not dp.exists():
+            continue
+        for pattern in patterns:
+            matches = list(dp.rglob(pattern))
+            if matches:
+                return str(matches[0])
+
+    return None
 
 
 def validate_weather_file(filepath) -> dict:
@@ -344,16 +404,20 @@ def download_weather_files(
     year_range,
     delay_seconds: float = 3.0,
     progress_callback=None,
+    search_dirs=None,
 ) -> dict:
     """Download NSRDB GOES v4 weather files for a location and range of years.
 
-    Skips years already cached on disk. Calls::
+    Checks pvsamlab cache, then SAM UI folders / search_dirs, then downloads
+    from the API. Calls::
 
         progress_callback(year, status, filepath, elapsed)
 
     at each event, where *status* is one of:
 
-    * ``'cached'``        — file already on disk, no download needed
+    * ``'cached'``        — file already in pvsamlab cache, no download needed
+    * ``'local_sam_ui'``  — file found in SAM Downloaded Weather Files folder
+    * ``'local_user'``    — file found in a user-specified search_dirs path
     * ``'downloading'``   — download about to start (filepath/elapsed are None)
     * ``'ok'``            — download succeeded, full calendar year data
     * ``'interpolated'``  — download succeeded but server filled a source gap
@@ -369,6 +433,9 @@ def download_weather_files(
         Seconds to sleep between downloads to avoid API rate limits.
     progress_callback : callable, optional
         Called after each event as described above.
+    search_dirs : list of str or Path, optional
+        Additional directories to search for local weather files before
+        downloading. Searched before the default SAM UI directories.
 
     Returns
     -------
@@ -393,6 +460,17 @@ def download_weather_files(
             if progress_callback:
                 progress_callback(year, 'cached', cached_path, 0.0)
             results[year] = cached_path
+            continue
+
+        # Check external local files (SAM UI dirs and user-specified dirs)
+        local_path = find_local_weather_file(lat, lon, str(year), search_dirs=search_dirs)
+        if local_path is not None:
+            local_p = Path(local_path)
+            is_sam_ui = any(local_p.is_relative_to(d) for d in _SAM_UI_DIRS)
+            status = 'local_sam_ui' if is_sam_ui else 'local_user'
+            if progress_callback:
+                progress_callback(year, status, local_path, 0.0)
+            results[year] = local_path
             continue
 
         if progress_callback:
